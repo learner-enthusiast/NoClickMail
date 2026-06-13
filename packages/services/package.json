@@ -3,15 +3,26 @@
   "version": "1.0.0",
   "private": true,
   "devDependencies": {
+    "@corsair-dev/cli": "^0.1.19",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.15.3",
     "dotenv-cli": "^11.0.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@corsair-dev/gmail": "^0.1.4",
+    "@corsair-dev/googlecalendar": "^0.1.4",
     "@repo/database": "workspace:*",
     "@repo/logger": "workspace:*",
+    "bcryptjs": "^2.4.3",
+    "corsair": "^0.1.76",
     "google-auth-library": "^10.5.0",
+    "jose": "^5.9.6",
+    "jsonwebtoken": "^9.0.3",
     "zod": "^4.3.5"
   }
 }
