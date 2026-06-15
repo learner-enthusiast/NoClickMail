@@ -44,7 +44,6 @@ export default function LoginPage() {
   function handleGoogleLogin() {
     if (!googleProvider?.authUrl) return;
     console.log(googleProvider.authUrl);
-    debugger;
     window.location.href = googleProvider.authUrl;
   }
 

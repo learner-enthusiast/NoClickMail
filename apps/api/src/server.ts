@@ -11,6 +11,8 @@ import { serverRouter, createContext } from "@repo/trpc/server";
 import helmet from "helmet";
 import { env } from "./env";
 import { googleAuthRouter } from "./routes.ts/google-auth";
+import { corsairAuthRouter } from "./routes.ts/corsair-auth";
+import { webhookRouter } from "./routes.ts/webhooks";
 
 export const app = express();
 const openApiDocument = generateOpenApiDocument(serverRouter, {
@@ -75,6 +77,8 @@ app.get("/openapi.json", (req, res) => {
 logger.debug(`docs: ${env.BASE_URL}/docs`);
 app.use("/docs", apiReference({ url: "/openapi.json" }));
 app.use("/auth", googleAuthRouter);
+app.use("/connect", corsairAuthRouter);
+app.use("/webhooks", webhookRouter);
 app.use(
   "/api",
   createOpenApiExpressMiddleware({

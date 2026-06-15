@@ -11,6 +11,9 @@ const envSchema = z.object({
   REFRESH_TOKEN_SECRET: z.string().min(32, "REFRESH_TOKEN_SECRET must be at least 32 chars"),
   ACCESS_TOKEN_EXPIRY: z.string().default("15m"),
   REFRESH_TOKEN_EXPIRY: z.string().default("30d"),
+  CLIENT_URL: z.string().default("http://localhost:3000"),
+  INTERNAL_URL: z.string().default("http://localhost:8000"),
+  CORSAIR_CONNECT_REDIRECT_URI: z.string().url(),
 });
 
 function createEnv(env: NodeJS.ProcessEnv) {

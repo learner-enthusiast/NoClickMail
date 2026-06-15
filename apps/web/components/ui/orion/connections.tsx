@@ -15,7 +15,7 @@ const PROVIDERS = [
   { id: "googlecalendar", label: "Google Calendar" },
 ] as const;
 
-function Connections() {
+export function Connections() {
   const { data, isPending } = connectionStatus();
 
   function connect(plugin: string) {
@@ -48,4 +48,3 @@ function Connections() {
     </div>
   );
 }
-export default Connections;
