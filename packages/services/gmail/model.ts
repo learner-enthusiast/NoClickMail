@@ -69,3 +69,28 @@ export const gmailEventModel = z.object({
   labelsRemoved: z.array(z.string()).optional(),
 });
 export type GmailEventType = z.infer<typeof gmailEventModel>;
+/** GET /gmail/sent-contacts — recipient suggestions from Sent mail */
+export const listSentContactsInputModel = z.object({
+  maxMessages: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .default(100)
+    .describe("How many Sent messages to scan"),
+  limit: z.number().int().min(1).max(50).default(10).describe("Max suggestions to return"),
+  q: z.string().optional().describe("Filter by name/email substring (for autocomplete)"),
+});
+export type ListSentContactsInputModelType = z.infer<typeof listSentContactsInputModel>;
+
+export const contactSuggestionModel = z.object({
+  email: z.string(),
+  name: z.string().nullable(),
+  frequency: z.number().int().describe("How many sent messages went to this address"),
+});
+export type ContactSuggestionModelType = z.infer<typeof contactSuggestionModel>;
+
+export const listSentContactsOutputModel = z.object({
+  contacts: z.array(contactSuggestionModel),
+});
+export type ListSentContactsOutputModelType = z.infer<typeof listSentContactsOutputModel>;

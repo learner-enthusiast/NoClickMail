@@ -4,6 +4,8 @@ import {
   gmailMessageDetailModel,
   listInboxInputModel,
   listInboxOutputModel,
+  listSentContactsInputModel,
+  listSentContactsOutputModel,
   sendMessageInputModel,
   sendMessageOutputModel,
 } from "@repo/services/gmail/model";
@@ -30,5 +32,10 @@ export const gmailRouter = router({
     .meta({ openapi: { method: "POST", path: getPath("/send"), tags: TAGS } })
     .input(sendMessageInputModel)
     .output(sendMessageOutputModel)
-    .mutation(({ ctx, input }) => gmailService.sendMessage(ctx.user, input)),
+    .mutation(({ ctx, input }) => gmailService.sendMessage(ctx.user, input)), // packages/trpc/server/routes/gmail/route.ts
+  sentContacts: authenticatedProcedure
+    .meta({ openapi: { method: "GET", path: getPath("/sent-contacts"), tags: TAGS } })
+    .input(listSentContactsInputModel)
+    .output(listSentContactsOutputModel)
+    .query(({ ctx, input }) => gmailService.listSentContacts(ctx.user, input)),
 });

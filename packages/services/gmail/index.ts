@@ -1,10 +1,13 @@
 import { corsair } from "../corsair";
 import type {
+  ContactSuggestionModelType,
   GetMessageInputModelType,
   GmailMessageDetailType,
   GmailMessageSummaryType,
   ListInboxInputModelType,
   ListInboxOutputModelType,
+  ListSentContactsInputModelType,
+  ListSentContactsOutputModelType,
   SendMessageInputModelType,
   SendMessageOutputModelType,
 } from "./model";
@@ -135,6 +138,83 @@ class GmailService {
       input.body,
     ].join("\r\n");
     return Buffer.from(message).toString("base64url");
+  }
+  async listSentContacts(
+    tenantId: string,
+    input: ListSentContactsInputModelType,
+  ): Promise<ListSentContactsOutputModelType> {
+    const gmail = this.gmail(tenantId);
+
+    const list = await gmail.messages.list({
+      labelIds: ["SENT"],
+      maxResults: input.maxMessages,
+    });
+
+    const ids = (list.messages ?? []).map((m) => m.id).filter((id): id is string => !!id);
+
+    const messages = await Promise.all(
+      ids.map(
+        (id) =>
+          gmail.messages.get({
+            id,
+            format: "metadata",
+            metadataHeaders: ["To", "Cc", "Bcc"],
+          }) as Promise<GmailMessage>,
+      ),
+    );
+
+    const byEmail = new Map<string, ContactSuggestionModelType>();
+
+    for (const msg of messages) {
+      for (const headerName of ["To", "Cc", "Bcc"] as const) {
+        const value = this.header(msg, headerName);
+        if (!value) continue;
+
+        for (const { email, name } of this.parseAddresses(value)) {
+          const key = email.toLowerCase();
+          const existing = byEmail.get(key);
+          if (existing) {
+            existing.frequency += 1;
+            if (!existing.name && name) existing.name = name;
+          } else {
+            byEmail.set(key, { email, name: name ?? null, frequency: 1 });
+          }
+        }
+      }
+    }
+
+    let contacts = [...byEmail.values()];
+
+    if (input.q) {
+      const q = input.q.toLowerCase();
+      contacts = contacts.filter(
+        (c) => c.email.toLowerCase().includes(q) || (c.name?.toLowerCase().includes(q) ?? false),
+      );
+    }
+
+    contacts.sort((a, b) => b.frequency - a.frequency);
+
+    return { contacts: contacts.slice(0, input.limit) };
+  }
+
+  private parseAddresses(headerValue: string): { email: string; name: string | null }[] {
+    const results: { email: string; name: string | null }[] = [];
+
+    // Good enough for typical headers: split on commas, then pull "Name <email>".
+    for (const part of headerValue.split(",")) {
+      const segment = part.trim();
+      if (!segment) continue;
+
+      const angle = segment.match(/^(.*)<([^>]+)>$/);
+      if (angle) {
+        const name = angle[1]?.trim().replace(/^"|"$/g, "") || null;
+        results.push({ email: angle[2]?.trim() ?? "", name });
+      } else if (segment.includes("@")) {
+        results.push({ email: segment, name: null });
+      }
+    }
+
+    return results;
   }
 }
 

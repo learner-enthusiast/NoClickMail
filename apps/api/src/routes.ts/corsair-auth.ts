@@ -249,17 +249,25 @@ async function registerCalendarWatch(tenantId: string) {
   if (!accessToken) return;
 
   const channelId = crypto.randomUUID();
-  const webhookUrl = `${apiEnv.BASE_URL}/connect/webhook?tenantId=${tenantId}`;
+  // was: `${apiEnv.BASE_URL}/connect/webhook?tenantId=${tenantId}`
+  const base = env.CORSAIR_WEBHOOK_BASE;
+  if (!base?.startsWith("https://")) {
+    logger.warn("Skipping Calendar watch: CORSAIR_WEBHOOK_BASE must be public HTTPS");
+    return;
+  }
+  const webhookUrl = `${base}/webhooks/calendar`;
 
   const watchRes = await fetch(
     "https://www.googleapis.com/calendar/v3/calendars/primary/events/watch",
     {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ id: channelId, type: "web_hook", address: webhookUrl }),
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: channelId,
+        type: "web_hook",
+        address: webhookUrl,
+        token: tenantId, // comes back as X-Goog-Channel-Token
+      }),
     },
   );
 
@@ -309,9 +317,9 @@ corsairAuthRouter.get("/callback", async (req, res) => {
     if (plugin === "gmail") {
       try {
         await registerGmailWatch(tenantId);
-        if (await duplicateGmailTokensToCalendar(tenantId)) {
-          await registerCalendarWatch(tenantId);
-        }
+        // if (await duplicateGmailTokensToCalendar(tenantId)) {
+        //   await registerCalendarWatch(tenantId);
+        // }
       } catch (err) {
         logger.error("Gmail post-connect setup failed", { err });
       }

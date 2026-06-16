@@ -21,6 +21,7 @@ const envSchema = z.object({
   CORSAIR_WEBHOOK_SECRET: z.preprocess(emptyToUndefined, z.string().min(16).optional()),
   CORSAIR_CONNECT_REDIRECT_URI: z.string().url(),
   GMAIL_PUBSUB_TOPIC_ID: z.string().optional(),
+  CORSAIR_WEBHOOK_BASE: z.string().url(),
 });
 function defaultPublicOpenApiDocs(nodeEnv: string) {
   return nodeEnv === "development" || nodeEnv === "test" ? "true" : "false";
