@@ -16,6 +16,8 @@
   "dependencies": {
     "@corsair-dev/gmail": "^0.1.4",
     "@corsair-dev/googlecalendar": "^0.1.4",
+    "@corsair-dev/mcp": "^0.1.22",
+    "@openai/agents": "^0.11.6",
     "@repo/database": "workspace:*",
     "@repo/logger": "workspace:*",
     "bcryptjs": "^2.4.3",

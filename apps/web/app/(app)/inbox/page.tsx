@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "~/components/ui/button";
+import AgentTester from "~/components/ui/orion/AgentTester";
 
 import { env } from "~/env.js";
 import { connectionStatus } from "~/hooks/connections";
@@ -45,6 +46,7 @@ function Connections() {
           </div>
         );
       })}
+      <AgentTester />
     </div>
   );
 }

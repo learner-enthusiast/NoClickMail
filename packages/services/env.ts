@@ -14,6 +14,8 @@ const envSchema = z.object({
   CLIENT_URL: z.string().default("http://localhost:3000"),
   INTERNAL_URL: z.string().default("http://localhost:8000"),
   CORSAIR_CONNECT_REDIRECT_URI: z.string().url(),
+  // packages/services/env.ts — add to the schema
+  OPENAI_API_KEY: z.string().min(1),
 });
 
 function createEnv(env: NodeJS.ProcessEnv) {
