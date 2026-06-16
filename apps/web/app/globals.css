@@ -42,75 +42,104 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-surface: var(--orion-surface);
+  --color-surface-bright: var(--orion-surface-bright);
+  --color-surface-container: var(--orion-surface-container);
+  --color-on-surface: var(--orion-on-surface);
+  --color-primary-accent: var(--orion-primary-accent);
+  --color-secondary-accent: var(--orion-secondary-accent);
+  --color-ai-accent: var(--orion-ai-accent);
+  --color-outline: var(--orion-outline);
 }
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* ── Brand primitives (Light — Warm Premium) ── */
+  --orion-surface: rgb(248 245 240); /* #F8F5F0 */
+  --orion-surface-container: rgb(255 253 248); /* #FFFDF8 */
+  --orion-surface-bright: rgb(255 253 248); /* cards = container in light */
+  --orion-primary-accent: rgb(55 48 163); /* #3730A3 */
+  --orion-secondary-accent: rgb(37 99 235); /* #2563EB */
+  --orion-ai-accent: rgb(124 58 237); /* #7C3AED */
+  --orion-on-surface: rgb(28 25 23); /* #1C1917 */
+  --orion-outline: rgb(230 221 210); /* #E6DDD2 */
+  /* ── shadcn semantics (mapped from brand) ── */
+  --background: var(--orion-surface);
+  --foreground: var(--orion-on-surface);
+  --card: var(--orion-surface-container);
+  --card-foreground: var(--orion-on-surface);
+  --popover: var(--orion-surface-container);
+  --popover-foreground: var(--orion-on-surface);
+  --primary: var(--orion-primary-accent);
+  --primary-foreground: rgb(255 255 255);
+  --secondary: rgb(55 48 163 / 0.08);
+  --secondary-foreground: var(--orion-primary-accent);
+  --muted: rgb(230 221 210 / 0.45);
+  --muted-foreground: rgb(28 25 23 / 0.62);
+  --accent: rgb(124 58 237 / 0.1);
+  --accent-foreground: var(--orion-ai-accent);
+  --destructive: rgb(220 38 38);
+  --border: var(--orion-outline);
+  --input: var(--orion-outline);
+  --ring: var(--orion-primary-accent);
+  /* Charts / sidebar aligned to accents */
+  --chart-1: var(--orion-primary-accent);
+  --chart-2: var(--orion-secondary-accent);
+  --chart-3: var(--orion-ai-accent);
+  --chart-4: rgb(234 179 8);
+  --chart-5: rgb(16 185 129);
+  --sidebar: var(--orion-surface);
+  --sidebar-foreground: var(--orion-on-surface);
+  --sidebar-primary: var(--orion-primary-accent);
+  --sidebar-primary-foreground: rgb(255 255 255);
+  --sidebar-accent: var(--orion-surface-container);
+  --sidebar-accent-foreground: var(--orion-on-surface);
+  --sidebar-border: var(--orion-outline);
+  --sidebar-ring: var(--orion-primary-accent);
 }
-
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* ── Brand primitives (Dark — Hero) ── */
+  --orion-surface: rgb(16 19 26); /* #10131A */
+  --orion-surface-bright: rgb(54 57 65); /* #363941 */
+  --orion-surface-container: rgb(54 57 65); /* elevated cards */
+  --orion-primary-accent: rgb(59 130 246); /* #3B82F6 */
+  --orion-secondary-accent: rgb(139 92 246); /* #8B5CF6 */
+  --orion-ai-accent: rgb(168 85 247); /* #A855F7 */
+  --orion-on-surface: rgb(255 255 255); /* #FFFFFF */
+  --orion-outline: rgb(42 42 42); /* #2A2A2A */
+  /* ── shadcn semantics ── */
+  --background: var(--orion-surface);
+  --foreground: var(--orion-on-surface);
+  --card: var(--orion-surface-container);
+  --card-foreground: var(--orion-on-surface);
+  --popover: var(--orion-surface-container);
+  --popover-foreground: var(--orion-on-surface);
+  --primary: var(--orion-primary-accent);
+  --primary-foreground: rgb(255 255 255);
+  --secondary: var(--orion-surface-bright);
+  --secondary-foreground: var(--orion-on-surface);
+  --muted: var(--orion-surface-bright);
+  --muted-foreground: rgb(255 255 255 / 0.65);
+  --accent: rgb(168 85 247 / 0.15);
+  --accent-foreground: var(--orion-ai-accent);
+  --destructive: rgb(248 113 113);
+  --border: var(--orion-outline);
+  --input: var(--orion-outline);
+  --ring: var(--orion-primary-accent);
+  --chart-1: var(--orion-primary-accent);
+  --chart-2: var(--orion-secondary-accent);
+  --chart-3: var(--orion-ai-accent);
+  --chart-4: rgb(250 204 21);
+  --chart-5: rgb(52 211 153);
+  --sidebar: var(--orion-surface);
+  --sidebar-foreground: var(--orion-on-surface);
+  --sidebar-primary: var(--orion-primary-accent);
+  --sidebar-primary-foreground: rgb(255 255 255);
+  --sidebar-accent: var(--orion-surface-bright);
+  --sidebar-accent-foreground: var(--orion-on-surface);
+  --sidebar-border: var(--orion-outline);
+  --sidebar-ring: var(--orion-primary-accent);
 }
 
 @layer base {

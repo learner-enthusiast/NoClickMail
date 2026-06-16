@@ -25,13 +25,10 @@ type AuthContextValue = {
   isLoggingOut: boolean;
 };
 
-const PUBLIC_ROUTES = ["/api-auth/login"];
-const PUBLIC_PREFIXES = ["/api-auth/google/callback"];
-
-function isPublicRoute(pathname: string) {
-  return (
-    PUBLIC_ROUTES.includes(pathname) ||
-    PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+const AUTHENTICATED_ROUTES = ["/inbox", "/settings"];
+function isAuthenticatedRoute(pathname: string) {
+  return AUTHENTICATED_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 }
 
@@ -57,16 +54,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = isSuccess && !!user;
 
   useEffect(() => {
-    const isPublic = isPublicRoute(pathname);
-
     if (isLoading) return;
 
-    if (isAuthenticated && isPublic) {
+    const isProtected = isAuthenticatedRoute(pathname);
+
+    // Authenticated users may only be on protected routes → bounce off public pages.
+    if (isAuthenticated && !isProtected) {
       router.replace("/inbox");
       return;
     }
 
-    if (!isAuthenticated && !isPublic) {
+    // Unauthenticated users may only be on public routes → bounce off protected pages.
+    if (!isAuthenticated && isProtected) {
       router.replace("/api-auth/login");
     }
   }, [isLoading, isAuthenticated, pathname, router]);

@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import React, { useState } from "react";
 import { AuthProvider } from "~/components/ui/orion/authProvider";
+import { Footer } from "~/components/ui/orion/Footer";
+import { Header } from "~/components/ui/orion/Header";
 import { Toaster } from "~/components/ui/sonner";
 
 import { trpc } from "~/trpc/client";
@@ -34,7 +36,11 @@ export const GlobalProviders: React.FC<{ children: React.ReactNode }> = ({ child
       >
         <trpc.Provider queryClient={queryClient} client={trpcClient}>
           <AuthProvider>
-            {children}
+            <div className="flex min-h-screen flex-col">
+              <Header />
+              <main className="flex-1">{children}</main>
+              <Footer />
+            </div>
             <Toaster />
           </AuthProvider>
         </trpc.Provider>
