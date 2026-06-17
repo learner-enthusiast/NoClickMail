@@ -2,7 +2,17 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
   entry: ["./src/index.ts"],
-  noExternal: ["@teachyst"], // transpile packages starting with `@teachyst` and their dependencies
+  noExternal: [/^@repo\//],
+  external: [
+    // optional peer imports inside @corsair-dev/mcp — not installed, not needed
+    "@anthropic-ai/claude-agent-sdk",
+    "@mastra/core/tools",
+    "@ai-sdk/mcp",
+    // heavy runtime deps — keep in node_modules
+    "corsair",
+    /^@corsair-dev\//,
+    "@openai/agents",
+  ],
   splitting: false,
   bundle: true,
   outDir: "./dist",
