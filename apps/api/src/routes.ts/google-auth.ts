@@ -23,7 +23,7 @@ const ONE_YEAR = 365 * 24 * 60 * 60 * 1000;
 const authCookieOptions = {
   path: "/",
   httpOnly: true,
-  secure: apiEnv.NODE_ENV === "prod",
+  secure: apiEnv.NODE_ENV === "prod" || apiEnv.NODE_ENV === "production",
   sameSite: "strict" as const,
   maxAge: ONE_YEAR,
 };

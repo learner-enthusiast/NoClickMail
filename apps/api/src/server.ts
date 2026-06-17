@@ -40,7 +40,7 @@ app.use(
     },
 
     hsts:
-      env.NODE_ENV === "prod"
+      env.NODE_ENV === "production" || env.NODE_ENV === "prod"
         ? {
             maxAge: 31536000,
             includeSubDomains: true,

@@ -6,7 +6,7 @@ const envSchema = z.object({
   CORSAIR_KEK: z.string().min(32, "CORSAIR_KEK must be at least 32 chars"),
   CORSAIR_GMAIL_REDIRECT_URI: z.string().url(),
   CORSAIR_CALENDAR_REDIRECT_URI: z.string().url(),
-  NODE_ENV: z.enum(["development", "prod"]).default("development"),
+  NODE_ENV: z.enum(["development", "production", "prod"]).default("development"),
   ACCESS_TOKEN_SECRET: z.string().min(32, "ACCESS_TOKEN_SECRET must be at least 32 chars"),
   REFRESH_TOKEN_SECRET: z.string().min(32, "REFRESH_TOKEN_SECRET must be at least 32 chars"),
   ACCESS_TOKEN_EXPIRY: z.string().default("15m"),
