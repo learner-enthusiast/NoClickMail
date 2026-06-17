@@ -10,5 +10,5 @@ export const gmailMessage = (input: RouterInputs["gmail"]["message"]) =>
 
 export const sendGmailMessage = () => pickMutationState(trpc.gmail.send.useMutation());
 // apps/web/hooks/gmail/index.ts
-export const gmailSentContacts = (input?: RouterInputs["gmail"]["sentContacts"]) =>
-  pickQueryState(trpc.gmail.sentContacts.useQuery(input ?? {}));
+export const gmailSentContacts = (input?: RouterInputs["gmail"]["sentContacts"], enabled = true) =>
+  pickQueryState(trpc.gmail.sentContacts.useQuery(input ?? {}, { enabled }));

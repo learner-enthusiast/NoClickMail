@@ -1,7 +1,7 @@
 import { OpenAIAgentsProvider } from "@corsair-dev/mcp";
-import { Agent, run, tool } from "@openai/agents";
+import { Agent, AgentInputItem, run, tool } from "@openai/agents";
 import { corsair } from "../corsair";
-
+type PriorTurn = { role: "user" | "assistant" | "system"; content: string };
 export default class TenantCorsairAgent {
   private static readonly CORSAIR_AGENT_INSTRUCTIONS =
     "You have access to Corsair tools. Use list_operations to discover available APIs, " +
@@ -27,9 +27,13 @@ export default class TenantCorsairAgent {
     });
   }
 
-  async executePrompt(userPrompt: string) {
-    const agentRunResult = await run(this.corsairAgent, userPrompt);
-    console.log(agentRunResult);
-    return agentRunResult.finalOutput;
+  async executePrompt(userPrompt: string, history: PriorTurn[] = []) {
+    // Map stored history → agent input items, then append the new user turn.
+    const input = [
+      ...history.map((m) => ({ role: m.role, content: m.content }) as AgentInputItem),
+      { role: "user" as const, content: userPrompt },
+    ];
+    const result = await run(this.corsairAgent, input);
+    return result.finalOutput;
   }
 }
