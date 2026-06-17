@@ -13,6 +13,7 @@ import { env } from "./env";
 import { googleAuthRouter } from "./routes.ts/google-auth";
 import { corsairAuthRouter } from "./routes.ts/corsair-auth";
 import { webhookRouter } from "./routes.ts/webhooks";
+import { eventsRouter } from "./routes.ts/events";
 
 export const app = express();
 const openApiDocument = generateOpenApiDocument(serverRouter, {
@@ -79,6 +80,7 @@ app.use("/docs", apiReference({ url: "/openapi.json" }));
 app.use("/auth", googleAuthRouter);
 app.use("/connect", corsairAuthRouter);
 app.use("/webhooks", webhookRouter);
+app.use("/events", eventsRouter);
 app.use(
   "/api",
   createOpenApiExpressMiddleware({

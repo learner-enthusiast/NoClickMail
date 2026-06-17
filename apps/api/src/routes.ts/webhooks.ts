@@ -3,6 +3,7 @@ import { logger } from "@repo/logger";
 import { env as apiEnv } from "../env";
 import db, { and, eq } from "@repo/database";
 import { usersTable } from "@repo/database/schema";
+import { sseHub } from "../sse/hub";
 export const webhookRouter = Router();
 
 type PubSubPushBody = {
@@ -52,6 +53,12 @@ webhookRouter.post("/corsair", async (req, res) => {
       return;
     }
     const tenantId = user.id;
+
+    // after await gmailService.syncFromHistory(tenantId, decoded.historyId)
+    sseHub.notify(tenantId, {
+      type: "gmail.inbox.changed",
+      historyId: String(decoded.historyId),
+    });
   } catch (err) {
     logger.error("Failed to process Gmail push", { err });
   }
@@ -92,6 +99,11 @@ webhookRouter.post("/calendar", async (req, res) => {
     // TODO: await calendarService.syncEvents(tenantId)
     //   - fetch events with the stored syncToken (events.getMany({ syncToken }))
     //   - persist changes + the new nextSyncToken
+    // after await calendarService.syncEvents(tenantId)
+    sseHub.notify(tenantId, {
+      type: "calendar.events.changed",
+      calendarId: "primary",
+    });
   } catch (err) {
     logger.error("Failed to process Calendar push", { err });
   }
