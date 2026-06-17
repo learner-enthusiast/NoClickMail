@@ -10,7 +10,7 @@ export const env = createEnv({
     GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
     GOOGLE_OAUTH_CLIENT_SECRET: z.string().optional(),
     GOOGLE_OAUTH_REDIRECT_URI: z.string().url().optional(),
-    NODE_ENV: z.enum(["development", "prod"]).default("development"),
+    NODE_ENV: z.enum(["development", "production", "prod"]).default("development"),
     ACCESS_TOKEN_SECRET: z.string().min(32, "ACCESS_TOKEN_SECRET must be at least 32 chars"),
     REFRESH_TOKEN_SECRET: z.string().min(32, "REFRESH_TOKEN_SECRET must be at least 32 chars"),
     ACCESS_TOKEN_EXPIRY: z.string().default("15m"),

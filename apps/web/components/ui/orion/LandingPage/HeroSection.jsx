@@ -1,17 +1,18 @@
 import React from "react";
 import { Button } from "../../button";
 import Image from "next/image";
+import { InViewAnnotation } from "../glitches/glitches";
 
 const HeroSection = () => {
   return (
     <div className="flex flex-col items-center justify-center gap-5">
-      <p className="type-hero-header">
+      <h1 className="type-hero-header">
         Your AI Executive Assistant for <br />{" "}
         <p className="text-secondary-accent">Email and Calender</p>
-      </p>
+      </h1>
       <p className="type-hero-subHeader max-w-[720px]">
         Manage emails,scheule meetings,draft responses , and stay productive with an AI assistant
-        that works alongside you
+        <InViewAnnotation> that works alongside you</InViewAnnotation>
       </p>
 
       <div className="flex flex-row gap-2">

@@ -25,7 +25,12 @@ type AuthContextValue = {
   isLoggingOut: boolean;
 };
 
-const AUTHENTICATED_ROUTES = ["/inbox", "/settings"];
+const AUTHENTICATED_ROUTES = [
+  "/dashboard/inbox",
+  "/dashboard/calendar",
+  "/dashboard/contacts",
+  "/dashboard/settings",
+];
 function isAuthenticatedRoute(pathname: string) {
   return AUTHENTICATED_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
@@ -60,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Authenticated users may only be on protected routes → bounce off public pages.
     if (isAuthenticated && !isProtected) {
-      router.replace("/inbox");
+      router.replace("/dashboard/inbox");
       return;
     }
 

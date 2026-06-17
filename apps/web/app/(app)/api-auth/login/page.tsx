@@ -1,25 +1,18 @@
 "use client";
 
+import React from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
-import { Alert, AlertDescription } from "~/components/ui/alert";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { Card, CardContent } from "~/components/ui/card";
 import { GoogleSignInButton } from "~/components/ui/GoogleSignInButton";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+
 import { useAuth } from "~/components/ui/orion/authProvider";
 import { getSupportedAuthenticationProviders } from "~/hooks/api/auth";
-import { trpc } from "~/trpc/client";
-
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isLoggingIn, isAuthenticated } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [formError, setFormError] = useState<string | null>(null);
+  const { isAuthenticated } = useAuth();
 
   const { data: providers, isPending: isLoadingProviders } = getSupportedAuthenticationProviders();
 

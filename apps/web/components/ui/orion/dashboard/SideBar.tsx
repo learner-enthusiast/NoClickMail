@@ -19,11 +19,11 @@ import { useAuth } from "~/components/ui/orion/authProvider";
 import { cn } from "~/lib/utils";
 
 const NAV_ITEMS: { label: string; href: string; icon: LucideIcon }[] = [
-  { label: "Workspace", href: "/workspace", icon: LayoutGrid },
-  { label: "Inbox", href: "/inbox", icon: Inbox },
-  { label: "Calendar", href: "/calendar", icon: Calendar },
-  { label: "Contacts", href: "/contacts", icon: Users },
-  { label: "Settings", href: "/settings", icon: Settings },
+  { label: "Workspace", href: "/dashboard/workspace", icon: LayoutGrid },
+  { label: "Inbox", href: "/dashboard/inbox", icon: Inbox },
+  { label: "Calendar", href: "/dashboard/calendar", icon: Calendar },
+  { label: "Contacts", href: "/dashboard/contacts", icon: Users },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
 function SideBarLink({ label, href, icon: Icon }: (typeof NAV_ITEMS)[number]) {

@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { logger } from "@repo/logger";
 import { env as apiEnv } from "../env";
-
+import db, { and, eq } from "@repo/database";
+import { usersTable } from "@repo/database/schema";
 export const webhookRouter = Router();
 
 type PubSubPushBody = {
@@ -35,8 +36,22 @@ webhookRouter.post("/corsair", async (req, res) => {
       messageId: body.message.messageId,
     });
 
-    // TODO: look up tenant by decoded.emailAddress, then call Gmail
-    // history.list(startHistoryId) with that account's token to fetch changes.
+    const email = decoded.emailAddress?.trim().toLowerCase();
+    if (!email) {
+      logger.warn("Gmail push missing emailAddress");
+      return;
+    }
+    // tenantId === users.id in your app
+    const [user] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, email))
+      .limit(1);
+    if (!user) {
+      logger.warn("Gmail push: no user for email", { emailAddress: decoded.emailAddress });
+      return;
+    }
+    const tenantId = user.id;
   } catch (err) {
     logger.error("Failed to process Gmail push", { err });
   }

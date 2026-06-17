@@ -51,7 +51,7 @@ class GmailService {
       ids.map(async (id) => {
         const msg = (await gmail.messages.get({
           id,
-          format: "metadata",
+          format: "full",
           metadataHeaders: ["From", "Subject", "Date"],
         })) as GmailMessage;
         return this.toSummary(msg);
@@ -157,13 +157,14 @@ class GmailService {
         (id) =>
           gmail.messages.get({
             id,
-            format: "metadata",
+            format: "full",
             metadataHeaders: ["To", "Cc", "Bcc"],
           }) as Promise<GmailMessage>,
       ),
     );
 
     const byEmail = new Map<string, ContactSuggestionModelType>();
+    const to = JSON.stringify(messages[0]?.payload);
 
     for (const msg of messages) {
       for (const headerName of ["To", "Cc", "Bcc"] as const) {

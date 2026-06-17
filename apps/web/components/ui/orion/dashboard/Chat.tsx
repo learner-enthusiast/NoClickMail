@@ -9,6 +9,7 @@ import {
   Send,
   Paperclip,
   Image as ImageIcon,
+  CalendarPlus,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { runAgent, agentThreadMessages, agentThreads } from "~/hooks/agent.ts";
@@ -16,6 +17,10 @@ import { trpc } from "~/trpc/client";
 import { cn } from "~/lib/utils";
 
 import { gmailSentContacts } from "~/hooks/gmail";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../tooltip";
+import { createCalendarEvent } from "~/hooks/calendar";
+import { toast } from "sonner";
+import CalendarInviteDialog from "../../calendarinvite";
 const QUICK_ACTIONS = [
   { label: "Summarize", icon: FileText, prompt: "Summarize the key risks in the selected report." },
   { label: "Draft", icon: PenLine, prompt: "Draft a concise response to the selected email." },
@@ -99,13 +104,14 @@ export function Chat() {
     null,
   );
   const [activeIndex, setActiveIndex] = useState(0);
-
   // Lazy: fetches once an @-mention begins, then cached (staleTime: Infinity in your QueryClient).
   const { data: contactsData } = gmailSentContacts(
     { maxMessages: 200, limit: 50 },
     mention !== null,
   );
-
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const { mutateAsync: createEvent, status: createStatus } = createCalendarEvent();
+  const isCreating = createStatus === "pending";
   const suggestions = useMemo(() => {
     if (!mention) return [];
     const q = mention.query.toLowerCase();
@@ -135,8 +141,8 @@ export function Chat() {
       // Persisted messages are the source of truth → refetch this thread.
       await utils.agent.threadMessages.invalidate({ threadId: res.threadId });
       await utils.agent.listThreads.invalidate();
-    } catch {
-      // keep pendingUser visible briefly? simplest: clear and let user retry
+    } catch (e) {
+      console.error(e);
     } finally {
       setPendingUser(null);
     }
@@ -178,6 +184,23 @@ export function Chat() {
   }
   return (
     <aside className="flex h-[calc(100vh-4rem)] w-full flex-col border-l border-border bg-sidebar">
+      <CalendarInviteDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        isSubmitting={isCreating}
+        onSubmit={async (values) => {
+          try {
+            const result = await createEvent(values);
+            await utils.calendar.events.invalidate();
+            toast.success("Calendar invite created");
+            if (result.htmlLink) window.open(result.htmlLink, "_blank");
+          } catch (err) {
+            console.error(err);
+            toast.error("Failed to create calendar invite");
+            throw err;
+          }
+        }}
+      />
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border px-4 py-4">
         <div className="flex size-9 items-center justify-center rounded-full bg-accent">
@@ -300,17 +323,26 @@ export function Chat() {
               disabled={isRunning}
               className="w-full resize-none bg-transparent px-2 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
             />
-            {/* …the existing footer row stays unchanged… */}
           </div>
 
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-1">
-              <Button type="button" variant="ghost" size="icon-sm" aria-label="Attach file">
-                <Paperclip className="size-4 text-muted-foreground" />
-              </Button>
-              <Button type="button" variant="ghost" size="icon-sm" aria-label="Attach image">
-                <ImageIcon className="size-4 text-muted-foreground" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Insert calendar invite"
+                    onClick={() => setInviteOpen(true)}
+                  >
+                    <CalendarPlus className="size-4 text-muted-foreground" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Create a calendar invite</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
 
             <div className="flex items-center gap-2">

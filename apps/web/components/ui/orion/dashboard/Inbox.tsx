@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Reply, MoreVertical } from "lucide-react";
+import { ArrowLeft, Reply, MoreVertical, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
 import { gmailInbox, gmailMessage } from "~/hooks/gmail";
@@ -32,16 +32,22 @@ function formatDate(date: string | null) {
 export function Inbox() {
   const { data, isPending, isError } = gmailInbox({ maxResults: 25 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  console.log(data);
   const messages = data?.messages ?? [];
 
   if (isPending) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading inbox…</div>;
+    return (
+      <div className="p-6 text-sm text-muted-foreground h-full flex justify-center items-center w-full">
+        <Loader2 className="size-5 animate-spin" />
+      </div>
+    );
   }
   if (isError) {
-    return <div className="p-6 text-sm text-destructive">Couldn’t load your inbox.</div>;
+    return (
+      <div className="p-6 text-sm text-destructive h-full flex justify-center items-center w-full">
+        Couldn’t load your inbox.
+      </div>
+    );
   }
-  console.log(messages);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] w-full">
@@ -108,7 +114,14 @@ export function Inbox() {
       </div>
 
       {/* Reader — only when an email is opened */}
-      {selectedId && <MailReader id={selectedId} onBack={() => setSelectedId(null)} />}
+      {selectedId && (
+        <MailReader
+          id={selectedId}
+          onBack={() => {
+            setSelectedId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -129,21 +142,9 @@ function MailReader({ id, onBack }: { id: string; onBack: () => void }) {
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="md:hidden"
-          onClick={onBack}
-          aria-label="Back"
-        >
-          <ArrowLeft className="size-5" />
-        </Button>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" aria-label="Reply">
-            <Reply className="size-5" />
-          </Button>
-          <Button variant="ghost" size="icon" aria-label="More">
-            <MoreVertical className="size-5" />
+          <Button variant="ghost" size="icon" aria-label="Reply" onClick={onBack}>
+            <ArrowLeft className="size-5" />
           </Button>
         </div>
       </div>

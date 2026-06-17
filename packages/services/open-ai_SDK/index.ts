@@ -9,6 +9,20 @@ export default class TenantCorsairAgent {
     "When referencing resources (like channels), always use their ID, not their name.";
 
   private readonly corsairAgent: Agent;
+  private summaryAgent = new Agent({
+    name: "Conversation Summarizer",
+    instructions: `
+  You summarize conversations.
+  
+  Return:
+  - User goals
+  - Completed actions
+  - Pending tasks
+  - Important entities
+  
+  Be concise.
+  `,
+  });
 
   constructor(private readonly tenantId: string) {
     const openAIAgentsProvider = new OpenAIAgentsProvider();
@@ -33,7 +47,9 @@ export default class TenantCorsairAgent {
       ...history.map((m) => ({ role: m.role, content: m.content }) as AgentInputItem),
       { role: "user" as const, content: userPrompt },
     ];
-    const result = await run(this.corsairAgent, input);
+
+    const summary = await run(this.summaryAgent, JSON.stringify(input));
+    const result = await run(this.corsairAgent, summary.finalOutput ?? "");
     return result.finalOutput;
   }
 }

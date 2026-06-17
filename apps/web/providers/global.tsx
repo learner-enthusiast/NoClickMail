@@ -7,6 +7,7 @@ import { AuthProvider } from "~/components/ui/orion/authProvider";
 import { Footer } from "~/components/ui/orion/Footer";
 import { Header } from "~/components/ui/orion/Header";
 import { Toaster } from "~/components/ui/sonner";
+import { TooltipProvider } from "~/components/ui/tooltip";
 
 import { trpc } from "~/trpc/client";
 import { createTRPCHttpBatchClientClient } from "~/trpc/create-client";
@@ -21,11 +22,9 @@ const queryClient = new QueryClient({
 });
 
 export const GlobalProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [trpcClient] = useState(() =>
-    trpc.createClient({
-      links: [createTRPCHttpBatchClientClient()],
-    }),
-  );
+  const trpcClient = trpc.createClient({
+    links: [createTRPCHttpBatchClientClient()],
+  });
   return (
     <QueryClientProvider client={queryClient}>
       <NextThemesProvider
@@ -36,11 +35,13 @@ export const GlobalProviders: React.FC<{ children: React.ReactNode }> = ({ child
       >
         <trpc.Provider queryClient={queryClient} client={trpcClient}>
           <AuthProvider>
-            <div className="flex min-h-screen flex-col">
-              <Header />
-              <main className="flex-1">{children}</main>
-              <Footer />
-            </div>
+            <TooltipProvider>
+              <div className="flex min-h-screen flex-col">
+                <Header />
+                <main className="flex-1">{children}</main>
+                <Footer />
+              </div>{" "}
+            </TooltipProvider>
             <Toaster />
           </AuthProvider>
         </trpc.Provider>
