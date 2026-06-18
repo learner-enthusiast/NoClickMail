@@ -109,7 +109,7 @@ export default function HelpPage() {
           <h1 className="text-headline-sm font-bold text-foreground">Help &amp; Guide</h1>
           <p className="mt-2 max-w-2xl text-body-md text-muted-foreground">
             Orion is your AI executive assistant for email and calendar — built for professionals
-            who want clarity without inbox noise.
+            who want clarity without inbox noise
           </p>
         </div>
         <Button asChild>
