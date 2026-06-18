@@ -20,7 +20,6 @@ import { useAuth } from "~/components/ui/orion/authProvider";
 import { cn } from "~/lib/utils";
 
 const NAV_ITEMS: { label: string; href: string; icon: LucideIcon }[] = [
-  { label: "Workspace", href: "/dashboard/workspace", icon: LayoutGrid },
   { label: "Inbox", href: "/dashboard/inbox", icon: Inbox },
   { label: "Calendar", href: "/dashboard/calendar", icon: Calendar },
   { label: "Drafts", href: "/dashboard/drafts", icon: DraftingCompass },
@@ -74,15 +73,10 @@ export function SideBar() {
 
       {/* Bottom */}
       <div className="mt-auto px-3 pb-4">
-        <Button className="mb-3 w-full gap-2" size="lg">
-          <Plus className="size-4" />
-          New Request
-        </Button>
-
         <div className="my-2 border-t border-border" />
 
         <Link
-          href="/help"
+          href="/dashboard/help"
           className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
         >
           <HelpCircle className="size-[18px]" />

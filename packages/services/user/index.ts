@@ -4,6 +4,7 @@ import { and, db, eq } from "@repo/database";
 import { usersTable } from "@repo/database/models/user";
 import { env } from "../env";
 import { googleOAuth2Client } from "../clients/google-oauth";
+import { unauthorized, notFound, conflict, badRequest, internal } from "../error";
 import {
   CreateUserWithEmailandPasswordInputModelType,
   CreateUserWithEmailandPasswordOutputModelType,
@@ -88,7 +89,7 @@ class UserService {
   ): Promise<CreateUserWithEmailandPasswordOutputModelType> {
     const { email, password, fullName } = payload;
     const existingUserWithemail = await this.getUserByEmail(email);
-    if (existingUserWithemail) throw new Error(`USer with ${email} already exists`);
+    if (existingUserWithemail) throw conflict(`User with ${email} already exists`);
     const salt = randomBytes(16).toString("hex");
     const hash = createHmac("sha256", salt).update(password).digest("hex");
     const userInsertResult = await db
@@ -96,7 +97,7 @@ class UserService {
       .values({ email, fullName, password: hash, salt: salt })
       .returning({ id: usersTable.id });
     if (!userInsertResult || userInsertResult.length === 0 || !userInsertResult[0]?.id)
-      throw new Error("User not created try again");
+      throw internal("User not created try again");
 
     let userId = userInsertResult[0].id;
     let accesstokenObj = await this.generateUserToken(
@@ -130,12 +131,12 @@ class UserService {
 
     // Avoid leaking whether the email exists
     if (!user || !user.password || !user.salt) {
-      throw new Error("Invalid credentials");
+      throw unauthorized("Invalid credentials");
     }
 
     const computedHash = createHmac("sha256", user.salt).update(password).digest("hex");
     if (computedHash !== user.password) {
-      throw new Error("Invalid credentials");
+      throw unauthorized("Invalid credentials");
     }
 
     const accessTokenObj = await this.generateUserToken(
@@ -186,12 +187,12 @@ class UserService {
 
     const verification = await this.verifyUserToken(refresh_token, env.REFRESH_TOKEN_SECRET);
     if (!verification.valid || !verification.decoded?.id) {
-      throw new Error("Invalid refresh token");
+      throw unauthorized("Invalid refresh token");
     }
 
     const user = await this.getUserById(verification.decoded.id);
     if (!user || !user.refreshToken || user.refreshToken !== refresh_token) {
-      throw new Error("Invalid refresh token");
+      throw unauthorized("Invalid refresh token");
     }
 
     const accessTokenObj = await this.generateUserToken(
@@ -219,7 +220,7 @@ class UserService {
     const { userId } = payload;
 
     const user = await this.getUserById(userId);
-    if (!user) throw new Error("User not found");
+    if (!user) throw notFound("User not found");
 
     return {
       id: user.id,
@@ -236,7 +237,7 @@ class UserService {
     const { userId } = payload;
 
     const user = await this.getUserById(userId);
-    if (!user) throw new Error("User not found");
+    if (!user) throw notFound("User not found");
 
     // Generate a verification token/OTP and send it via email (TODO: email provider).
     // Example token (JWT):
@@ -259,7 +260,7 @@ class UserService {
     };
 
     if (decoded?.id !== userId || decoded?.purpose !== "verify_email") {
-      throw new Error("Invalid verification token");
+      throw badRequest("Invalid verification token");
     }
 
     await db.update(usersTable).set({ emailVerified: true }).where(eq(usersTable.id, userId));
@@ -273,7 +274,7 @@ class UserService {
     const { userId } = payload;
 
     const user = await this.getUserById(userId);
-    if (!user) throw new Error("User not found");
+    if (!user) throw notFound("User not found");
 
     // Generate reset token/OTP and send it (TODO: email provider).
     // Example token (JWT):
@@ -295,7 +296,7 @@ class UserService {
     };
 
     if (decoded?.id !== userId || decoded?.purpose !== "reset_password") {
-      throw new Error("Invalid reset token");
+      throw badRequest("Invalid reset token");
     }
 
     const salt = randomBytes(16).toString("hex");
@@ -315,10 +316,10 @@ class UserService {
     const { userId, currentPassword, newPassword } = payload;
 
     const user = await this.getUserById(userId);
-    if (!user || !user.password || !user.salt) throw new Error("Invalid credentials");
+    if (!user || !user.password || !user.salt) throw unauthorized("Invalid credentials");
 
     const currentHash = createHmac("sha256", user.salt).update(currentPassword).digest("hex");
-    if (currentHash !== user.password) throw new Error("Invalid credentials");
+    if (currentHash !== user.password) throw unauthorized("Invalid credentials");
 
     const newSalt = randomBytes(16).toString("hex");
     const newHash = createHmac("sha256", newSalt).update(newPassword).digest("hex");

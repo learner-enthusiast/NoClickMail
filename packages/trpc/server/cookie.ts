@@ -1,5 +1,6 @@
 import { CookieOptions, Request, Response } from "express";
 import { TRPCContext } from "./context";
+import { env } from "@repo/services/env";
 const ONE_MINUTE = 60 * 1000;
 const ONE_HOUR = 60 * ONE_MINUTE;
 const ONE_DAY = 24 * ONE_HOUR;
@@ -9,7 +10,7 @@ const ONE_YEAR = 12 * ONE_MONTH;
 export const defaultCookieOptions: CookieOptions = {
   path: "/",
   httpOnly: true,
-  secure: false,
+  secure: env.NODE_ENV === "production",
   sameSite: "strict",
   maxAge: ONE_YEAR,
 };

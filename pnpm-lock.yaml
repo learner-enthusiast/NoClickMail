@@ -436,6 +436,9 @@ importers:
       '@repo/logger':
         specifier: workspace:*
         version: link:../logger
+      '@trpc/server':
+        specifier: ^11.8.1
+        version: 11.17.0(typescript@5.9.3)
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3

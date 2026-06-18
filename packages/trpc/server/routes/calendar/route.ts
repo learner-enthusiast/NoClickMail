@@ -9,7 +9,7 @@ import {
   listEventsInputModel,
   listEventsOutputModel,
 } from "@repo/services/calendar/model";
-import { authenticatedProcedure, router } from "../../trpc";
+import { authenticatedProcedure, csrfProtectedProcedure, router } from "../../trpc";
 import { generatePath } from "../../utils/path-generator";
 
 const TAGS = ["Calendar"];
@@ -28,13 +28,13 @@ export const calendarRouter = router({
     .output(calendarEventModel)
     .query(({ ctx, input }) => calendarService.getEvent(ctx.user, input)),
 
-  createEvent: authenticatedProcedure
+  createEvent: csrfProtectedProcedure
     .meta({ openapi: { method: "POST", path: getPath("/event"), tags: TAGS } })
     .input(createEventInputModel)
     .output(createEventOutputModel)
     .mutation(({ ctx, input }) => calendarService.createEvent(ctx.user, input)),
 
-  deleteEvent: authenticatedProcedure
+  deleteEvent: csrfProtectedProcedure
     .meta({ openapi: { method: "POST", path: getPath("/event/delete"), tags: TAGS } })
     .input(deleteEventInputModel)
     .output(deleteEventOutputModel)

@@ -1,5 +1,6 @@
 import db, { and, asc, desc, eq } from "@repo/database";
 import { chatMessages, chatThreads } from "@repo/database/schema";
+import { notFound } from "../error";
 
 // ── Tunables for "careful" context ──
 const MAX_CONTEXT_MESSAGES = 20; // hard cap on turns sent to the model
@@ -11,6 +12,15 @@ function estimateTokens(text: string): number {
 }
 
 class ChatService {
+  async getThreadForUser(userId: string, threadId: string) {
+    const [thread] = await db
+      .select()
+      .from(chatThreads)
+      .where(and(eq(chatThreads.id, threadId), eq(chatThreads.userId, userId)))
+      .limit(1);
+    if (!thread) throw notFound("Thread not found");
+    return thread;
+  }
   async createThread(userId: string, title?: string) {
     const [thread] = await db
       .insert(chatThreads)
@@ -42,6 +52,7 @@ class ChatService {
     role: "user" | "assistant" | "system";
     content: string;
   }) {
+    await this.getThreadForUser(input.userId, input.threadId);
     const content = input.content.slice(0, MAX_MESSAGE_CHARS);
     const [msg] = await db
       .insert(chatMessages)

@@ -2,7 +2,9 @@ import { gmailService } from "../../services";
 import {
   deleteMessageInputModel,
   deleteMessageOutputModel,
+  getDraftInputModel,
   getMessageInputModel,
+  gmailDraftDetailModel,
   gmailMessageDetailModel,
   listDraftsInputModel,
   listInboxInputModel,
@@ -19,7 +21,7 @@ import {
   sendMessageInputModel,
   sendMessageOutputModel,
 } from "@repo/services/gmail/model";
-import { authenticatedProcedure, router } from "../../trpc";
+import { authenticatedProcedure, csrfProtectedProcedure, router } from "../../trpc";
 import { generatePath } from "../../utils/path-generator";
 
 const TAGS = ["Gmail"];
@@ -38,7 +40,7 @@ export const gmailRouter = router({
     .output(gmailMessageDetailModel)
     .query(({ ctx, input }) => gmailService.getMessage(ctx.user, input)),
 
-  send: authenticatedProcedure
+  send: csrfProtectedProcedure
     .meta({ openapi: { method: "POST", path: getPath("/send"), tags: TAGS } })
     .input(sendMessageInputModel)
     .output(sendMessageOutputModel)
@@ -60,13 +62,13 @@ export const gmailRouter = router({
     .output(listMessagesOutputModel)
     .query(({ ctx, input }) => gmailService.listDrafts(ctx.user, input)),
 
-  deleteMessage: authenticatedProcedure
+  deleteMessage: csrfProtectedProcedure
     .meta({ openapi: { method: "DELETE", path: getPath("/message"), tags: TAGS } })
     .input(deleteMessageInputModel)
     .output(deleteMessageOutputModel)
     .mutation(({ ctx, input }) => gmailService.deleteMessage(ctx.user, input)),
 
-  markMessageRead: authenticatedProcedure
+  markMessageRead: csrfProtectedProcedure
     .meta({ openapi: { method: "PATCH", path: getPath("/message/read"), tags: TAGS } })
     .input(markMessageReadInputModel)
     .output(markMessageReadOutputModel)
@@ -76,9 +78,14 @@ export const gmailRouter = router({
     .input(listTrashInputModel)
     .output(listMessagesOutputModel)
     .query(({ ctx, input }) => gmailService.listTrash(ctx.user, input)),
-  restoreMessage: authenticatedProcedure
+  restoreMessage: csrfProtectedProcedure
     .meta({ openapi: { method: "PATCH", path: getPath("/message/restore"), tags: TAGS } })
     .input(restoreMessageInputModel)
     .output(restoreMessageOutputModel)
     .mutation(({ ctx, input }) => gmailService.restoreMessage(ctx.user, input)),
+  getDraftMessage: authenticatedProcedure
+    .meta({ openapi: { method: "GET", path: getPath("/draft"), tags: TAGS } })
+    .input(getDraftInputModel)
+    .output(gmailDraftDetailModel)
+    .query(({ ctx, input }) => gmailService.getDraft(ctx.user, input)),
 });

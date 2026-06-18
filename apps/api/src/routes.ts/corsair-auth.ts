@@ -11,7 +11,8 @@ import { createAccountKeyManager, createIntegrationKeyManager } from "corsair/co
 import { createCorsairDatabase } from "corsair/db";
 import { env as serviceEnv } from "@repo/services/env";
 import { env as apiEnv, env } from "../env";
-
+import { calendarWatchChannels } from "@repo/database/schema";
+import { buildCalendarChannelToken } from "@repo/services/webhooks/calendar-channeel";
 export const corsairAuthRouter = Router();
 import type { Request } from "express";
 import * as JWT from "jsonwebtoken";
@@ -249,13 +250,15 @@ async function registerCalendarWatch(tenantId: string) {
   if (!accessToken) return;
 
   const channelId = crypto.randomUUID();
-  // was: `${apiEnv.BASE_URL}/connect/webhook?tenantId=${tenantId}`
   const base = env.CORSAIR_WEBHOOK_BASE;
+
   if (!base?.startsWith("https://")) {
     logger.warn("Skipping Calendar watch: CORSAIR_WEBHOOK_BASE must be public HTTPS");
     return;
   }
-  const webhookUrl = `${base}/webhooks/calendar`;
+
+  const webhookUrl = `${base}/webhooks/calendar?token=${env.CORSAIR_WEBHOOK_SECRET}`;
+  const channelToken = buildCalendarChannelToken(tenantId, channelId, env.CORSAIR_WEBHOOK_SECRET);
 
   const watchRes = await fetch(
     "https://www.googleapis.com/calendar/v3/calendars/primary/events/watch",
@@ -266,7 +269,7 @@ async function registerCalendarWatch(tenantId: string) {
         id: channelId,
         type: "web_hook",
         address: webhookUrl,
-        token: tenantId, // comes back as X-Goog-Channel-Token
+        token: channelToken,
       }),
     },
   );
@@ -277,9 +280,23 @@ async function registerCalendarWatch(tenantId: string) {
   }
 
   const watchData = (await watchRes.json()) as GoogleWatchResponse;
+
+  if (!watchData.resourceId) {
+    logger.error("Calendar watch missing resourceId", { tenantId, channelId });
+    return;
+  }
+
+  await db.insert(calendarWatchChannels).values({
+    channelId,
+    resourceId: watchData.resourceId,
+    tenantId,
+    expiresAt: watchData.expiration ? new Date(Number(watchData.expiration)) : null,
+  });
+
   logger.info("Calendar watch registered", {
     tenantId,
     channelId,
+    resourceId: watchData.resourceId,
     expiration: watchData.expiration
       ? new Date(Number(watchData.expiration)).toISOString()
       : undefined,

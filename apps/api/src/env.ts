@@ -18,10 +18,10 @@ const envSchema = z.object({
   CLIENT_URL: z.string().default("http://localhost:3000"),
   OPENAPI_DOCS_SECRET: z.preprocess(emptyToUndefined, z.string().min(8).optional()),
   PUBLIC_OPENAPI_DOCS: z.enum(["true", "false"]).optional(),
-  CORSAIR_WEBHOOK_SECRET: z.preprocess(emptyToUndefined, z.string().min(16).optional()),
   CORSAIR_CONNECT_REDIRECT_URI: z.string().url(),
   GMAIL_PUBSUB_TOPIC_ID: z.string().optional(),
   CORSAIR_WEBHOOK_BASE: z.string().url(),
+  CORSAIR_WEBHOOK_SECRET: z.preprocess(emptyToUndefined, z.string().min(16)),
 });
 function defaultPublicOpenApiDocs(nodeEnv: string) {
   return nodeEnv === "development" || nodeEnv === "test" ? "true" : "false";

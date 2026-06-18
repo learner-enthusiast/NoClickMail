@@ -18,7 +18,12 @@ import {
   changePasswordOutputModel,
   getAuthenticationMethodOutputSchema,
 } from "@repo/services/user/model";
-import { authenticatedProcedure, publicProcedure, router } from "../../trpc";
+import {
+  authenticatedProcedure,
+  csrfProtectedProcedure,
+  publicProcedure,
+  router,
+} from "../../trpc";
 import { generatePath } from "../../utils/path-generator";
 import {
   AUTHENTICATION_COOKIE_NAME_ACCESS,
@@ -79,7 +84,7 @@ export const authRouter = router({
       return { id, access_token, refresh_token, csrfToken };
     }),
 
-  logout: authenticatedProcedure
+  logout: csrfProtectedProcedure
     .meta({ openapi: { method: "POST", path: getPath("/logout"), tags: TAGS } })
     .input(zodUndefinedModel)
     .output(logoutUserOutputModel)
@@ -113,7 +118,7 @@ export const authRouter = router({
       return userService.getMe({ userId: ctx.user });
     }),
 
-  verifyEmail: authenticatedProcedure
+  verifyEmail: csrfProtectedProcedure
     .meta({ openapi: { method: "POST", path: getPath("/verify-email"), tags: TAGS } })
     .input(verifyEmailInputModel.omit({ userId: true }))
     .output(verifyEmailOutputModel)
@@ -121,7 +126,7 @@ export const authRouter = router({
       return userService.verifyEmail({ userId: ctx.user, ...input });
     }),
 
-  resendVerification: authenticatedProcedure
+  resendVerification: csrfProtectedProcedure
     .meta({ openapi: { method: "POST", path: getPath("/resend-verification"), tags: TAGS } })
     .input(zodUndefinedModel)
     .output(resendVerificationEmailOutputModel)
@@ -129,7 +134,7 @@ export const authRouter = router({
       return userService.resendVerificationEmail({ userId: ctx.user });
     }),
 
-  forgotPassword: authenticatedProcedure
+  forgotPassword: csrfProtectedProcedure
     .meta({ openapi: { method: "POST", path: getPath("/forgot-password"), tags: TAGS } })
     .input(zodUndefinedModel)
     .output(forgotPasswordOutputModel)
@@ -137,7 +142,7 @@ export const authRouter = router({
       return userService.forgotPassword({ userId: ctx.user });
     }),
 
-  resetPassword: authenticatedProcedure
+  resetPassword: csrfProtectedProcedure
     .meta({ openapi: { method: "POST", path: getPath("/reset-password"), tags: TAGS } })
     .input(resetPasswordInputModel.omit({ userId: true }))
     .output(resetPasswordOutputModel)
@@ -145,7 +150,7 @@ export const authRouter = router({
       return userService.resetPassword({ userId: ctx.user, ...input });
     }),
 
-  changePassword: authenticatedProcedure
+  changePassword: csrfProtectedProcedure
     .meta({ openapi: { method: "POST", path: getPath("/change-password"), tags: TAGS } })
     .input(changePasswordInputModel.omit({ userId: true }))
     .output(changePasswordOutputModel)

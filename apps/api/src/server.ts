@@ -94,6 +94,17 @@ app.use(
   trpcExpress.createExpressMiddleware({
     router: serverRouter,
     createContext,
+    onError({ error, path, type, ctx, req }) {
+      logger.error("tRPC error", {
+        path,
+        type,
+        code: error.code,
+        message: error.message,
+        userId: "user" in (ctx as object) ? (ctx as { user?: string }).user : undefined,
+        method: req.method,
+        url: req.url,
+      });
+    },
   }),
 );
 

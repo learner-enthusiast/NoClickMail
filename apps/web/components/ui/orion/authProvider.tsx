@@ -31,6 +31,7 @@ const AUTHENTICATED_ROUTES = [
   "/dashboard/sent",
   "/dashboard/drafts",
   "/dashboard/trash",
+  "/dashboard/help",
 ];
 function isAuthenticatedRoute(pathname: string) {
   return AUTHENTICATED_ROUTES.some(

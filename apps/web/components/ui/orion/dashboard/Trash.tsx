@@ -3,13 +3,42 @@ import { Loader2 } from "lucide-react";
 import { useGmailMessagesPagination } from "~/hooks/gmail/pagination";
 import { MailMessageList } from "./MailMessageList";
 import { MailReader } from "./Inbox";
+import { deleteGmailMessage } from "~/hooks/gmail";
+import { toast } from "sonner";
 
 export function Trash() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { messages, hasMore, loadMore, removeMessageLocally, isPending, isLoadingMore, isError } =
-    useGmailMessagesPagination("trash");
-
+  const {
+    messages,
+    hasMore,
+    loadMore,
+    removeMessageLocally,
+    restoreMessageLocally,
+    isPending,
+    isLoadingMore,
+    isError,
+  } = useGmailMessagesPagination("trash");
+  const { mutateAsync: deleteMessage, status: deleteStatus } = deleteGmailMessage();
+  async function handleDeleteMessage(id: string) {
+    const removed = messages.find((m) => m.id === id);
+    if (!removed) return;
+    // Optimistic: remove from list + close reader
+    removeMessageLocally(id);
+    setSelectedId(null);
+    try {
+      await deleteMessage({
+        id,
+        permanent: true, // move to trash
+        isDraft: false,
+      });
+      toast.success("Message moved to trash");
+    } catch {
+      restoreMessageLocally(removed);
+      setSelectedId(id);
+      toast.error("Couldn't move message to trash");
+    }
+  }
   if (isPending)
     return (
       <div className="flex min-h-full w-full items-center justify-center text-sm text-muted-foreground">
@@ -32,7 +61,14 @@ export function Trash() {
         onLoadMore={loadMore}
         emptyLabel="Trash is empty."
       />
-      {selectedId && <MailReader id={selectedId} onBack={() => setSelectedId(null)} />}
+      {selectedId && (
+        <MailReader
+          id={selectedId}
+          onBack={() => setSelectedId(null)}
+          onDelete={handleDeleteMessage}
+          isDeleting={deleteStatus === "pending"}
+        />
+      )}
     </div>
   );
 }

@@ -14,9 +14,9 @@ import { connectionStatus } from "~/hooks/connections";
 import { env } from "~/env";
 
 const NAV_ITEMS = [
-  { label: "Dashboard", href: "/inbox" },
-  { label: "Activity", href: "/activity" },
-  { label: "Analytics", href: "/analytics" },
+  // { label: "Dashboard", href: "/inbox" },
+  // { label: "Activity", href: "/activity" },
+  // { label: "Analytics", href: "/analytics" },
 ] as const;
 const API_BASE = (env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/trpc").replace(
   /\/trpc\/?$/,
@@ -129,13 +129,12 @@ export function Header() {
         </Link>
 
         {/* Center — nav (authenticated only) */}
-        {isAuthenticated && (
+        {/* {isAuthenticated && (
           <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-10 md:flex">
-            {NAV_ITEMS.map((item) => (
-              <NavLink key={item.href} {...item} />
-            ))}
+            {NAV_ITEMS.length > 0 &&
+              NAV_ITEMS.map((item) => <NavLink key={item?.href} {...item} />)}
           </nav>
-        )}
+        )} */}
 
         {/* Right — actions */}
         <div className="flex items-center gap-1">

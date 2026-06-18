@@ -27,3 +27,5 @@ export const listGmailTrash = (input?: RouterInputs["gmail"]["listTrash"]) =>
   pickQueryState(trpc.gmail.listTrash.useQuery(input ?? {}));
 
 export const restoreGmailMessage = () => pickMutationState(trpc.gmail.restoreMessage.useMutation());
+export const gmailDraft = (input: RouterInputs["gmail"]["getDraftMessage"]) =>
+  pickQueryState(trpc.gmail.getDraftMessage.useQuery(input));

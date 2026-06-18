@@ -163,3 +163,14 @@ export const restoreMessageOutputModel = z.object({
     .describe("Where Gmail put the message after restore"),
 });
 export type RestoreMessageOutputModelType = z.infer<typeof restoreMessageOutputModel>;
+/** GET /gmail/draft */
+export const getDraftInputModel = z.object({
+  id: z.string().describe("Gmail draft id"),
+});
+export type GetDraftInputModelType = z.infer<typeof getDraftInputModel>;
+
+export const gmailDraftDetailModel = gmailMessageDetailModel.extend({
+  draftId: z.string(),
+  messageId: z.string().optional(),
+});
+export type GmailDraftDetailType = z.infer<typeof gmailDraftDetailModel>;

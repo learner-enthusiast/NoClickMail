@@ -9,22 +9,54 @@ import {
 } from "./cookie";
 import { GenerateUSerTokenPayload } from "@repo/services/user/model";
 import { env } from "@repo/services/env";
+import { toTRPCError } from "./map-error";
 
-export const tRPCContext = initTRPC.meta<OpenApiMeta>().context<typeof createContext>().create({});
+export const tRPCContext = initTRPC
+  .meta<OpenApiMeta>()
+  .context<typeof createContext>()
+  .create({
+    errorFormatter({ shape, error }) {
+      const isProd = env.NODE_ENV === "production";
+
+      return {
+        ...shape,
+        message:
+          isProd && error.code === "INTERNAL_SERVER_ERROR" ? "Something went wrong" : shape.message,
+        data: {
+          ...shape.data,
+          stack: isProd ? undefined : shape.data.stack,
+        },
+      };
+    },
+  });
 
 export const router = tRPCContext.router;
 
-export const publicProcedure = tRPCContext.procedure;
-export const authenticatedProcedure = tRPCContext.procedure.use((options) => {
+const errorHandlerMiddleware = tRPCContext.middleware(async ({ next }) => {
+  try {
+    return await next();
+  } catch (err) {
+    throw toTRPCError(err);
+  }
+});
+export const publicProcedure = tRPCContext.procedure.use(errorHandlerMiddleware);
+
+export const authenticatedProcedure = publicProcedure.use((options) => {
   const { ctx } = options;
 
   const userToken = getAuthenticationCookie(ctx, AUTHENTICATION_COOKIE_NAME_ACCESS);
-  if (!userToken) throw new Error("User is not logged in");
-  const decoded = JWT.verify(userToken, env.ACCESS_TOKEN_SECRET) as GenerateUSerTokenPayload;
+  if (!userToken) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Not logged in" });
+  }
 
-  return options.next({
-    ctx: { ...ctx, user: decoded.id },
-  });
+  try {
+    const decoded = JWT.verify(userToken, env.ACCESS_TOKEN_SECRET) as GenerateUSerTokenPayload;
+    return options.next({
+      ctx: { ...ctx, user: decoded.id },
+    });
+  } catch {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid or expired token" });
+  }
 });
 export const csrfProtectedProcedure = authenticatedProcedure.use((options) => {
   // Only require CSRF for mutations

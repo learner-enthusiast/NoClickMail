@@ -4,7 +4,13 @@ import { useState } from "react";
 import { ArrowLeft, Reply, MoreVertical, Loader2, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
-import { deleteGmailMessage, gmailInbox, gmailMessage, markGmailMessageRead } from "~/hooks/gmail";
+import {
+  deleteGmailMessage,
+  gmailDraft,
+  gmailInbox,
+  gmailMessage,
+  markGmailMessageRead,
+} from "~/hooks/gmail";
 import { cn } from "~/lib/utils";
 import { useGmailInboxPagination, useGmailMessagesPagination } from "~/hooks/gmail/pagination";
 import { MailMessageList } from "./MailMessageList";
@@ -131,13 +137,15 @@ export function MailReader({
   onBack,
   onDelete,
   isDeleting = false,
+  isDraft = false,
 }: {
   id: string;
   onBack: () => void;
   onDelete?: (id: string) => void | Promise<void>;
   isDeleting?: boolean;
+  isDraft?: boolean;
 }) {
-  const { data: msg, isPending, isError } = gmailMessage({ id });
+  const { data: msg, isPending, isError } = isDraft ? gmailDraft({ id }) : gmailMessage({ id });
 
   if (isPending) {
     return <div className="flex-1 p-6 text-sm text-muted-foreground">Loading message…</div>;

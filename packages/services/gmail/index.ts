@@ -3,7 +3,9 @@ import type {
   ContactSuggestionModelType,
   DeleteMessageInputModelType,
   DeleteMessageOutputModelType,
+  GetDraftInputModelType,
   GetMessageInputModelType,
+  GmailDraftDetailType,
   GmailMessageDetailType,
   GmailMessageSummaryType,
   ListDraftsInputModelType,
@@ -332,6 +334,23 @@ class GmailService {
     return {
       success: true,
       restoredTo: this.restoredLocation(summary),
+    };
+  }
+  async getDraft(tenantId: string, input: GetDraftInputModelType): Promise<GmailDraftDetailType> {
+    const gmail = this.gmail(tenantId);
+
+    const draft = await gmail.drafts.get({ id: input.id, format: "full" });
+    const msg = draft.message as GmailMessage;
+    const { text, html } = this.extractBody(msg.payload);
+
+    return {
+      ...this.toSummary({ ...msg, id: input.id }),
+      draftId: input.id,
+      messageId: msg.id,
+      to: this.header(msg, "To"),
+      cc: this.header(msg, "Cc"),
+      bodyText: text,
+      bodyHtml: html,
     };
   }
 }
