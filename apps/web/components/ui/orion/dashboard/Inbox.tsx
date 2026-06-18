@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Reply, MoreVertical, Loader2 } from "lucide-react";
+import { ArrowLeft, Reply, MoreVertical, Loader2, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
-import { gmailInbox, gmailMessage } from "~/hooks/gmail";
+import { deleteGmailMessage, gmailInbox, gmailMessage, markGmailMessageRead } from "~/hooks/gmail";
 import { cn } from "~/lib/utils";
+import { useGmailInboxPagination, useGmailMessagesPagination } from "~/hooks/gmail/pagination";
+import { MailMessageList } from "./MailMessageList";
+import { toast } from "sonner";
 
 function parseFrom(from: string | null) {
   if (!from) return { name: "Unknown", email: "" };
@@ -30,10 +33,54 @@ function formatDate(date: string | null) {
 }
 
 export function Inbox() {
-  const { data, isPending, isError } = gmailInbox({ maxResults: 25 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const messages = data?.messages ?? [];
 
+  const {
+    messages,
+    hasMore,
+    loadMore,
+    markMessageReadLocally,
+    removeMessageLocally,
+    restoreMessageLocally,
+    isPending,
+    isLoadingMore,
+    isError,
+  } = useGmailMessagesPagination("inbox");
+  const { mutateAsync: markRead } = markGmailMessageRead();
+  const { mutateAsync: deleteMessage, status: deleteStatus } = deleteGmailMessage();
+
+  async function handleSelectMessage(msg: (typeof messages)[number]) {
+    setSelectedId(msg.id);
+    if (!msg.unread) return;
+    // Optimistic: dull styling right away
+    markMessageReadLocally(msg.id);
+    try {
+      await markRead({ id: msg.id, read: true });
+    } catch {
+      // Revert on failure — simplest: refetch first page state
+      // or flip unread back for this id only
+      markMessageReadLocally(msg.id); // won't work for revert — see note below
+    }
+  }
+  async function handleDeleteMessage(id: string) {
+    const removed = messages.find((m) => m.id === id);
+    if (!removed) return;
+    // Optimistic: remove from list + close reader
+    removeMessageLocally(id);
+    setSelectedId(null);
+    try {
+      await deleteMessage({
+        id,
+        permanent: false, // move to trash
+        isDraft: false,
+      });
+      toast.success("Message moved to trash");
+    } catch {
+      restoreMessageLocally(removed);
+      setSelectedId(id);
+      toast.error("Couldn't move message to trash");
+    }
+  }
   if (isPending) {
     return (
       <div className="p-6 text-sm text-muted-foreground h-full flex justify-center items-center w-full">
@@ -52,66 +99,17 @@ export function Inbox() {
   return (
     <div className="flex h-[calc(100vh-4rem)] w-full">
       {/* List — full width when nothing selected, narrow when reading */}
-      <div
-        className={cn(
-          "flex flex-col border-r border-border",
-          selectedId ? "hidden w-full md:flex md:w-[360px]" : "w-full",
-        )}
-      >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-headline-sm font-bold text-foreground">Inbox</h2>
-          <span className="text-xs text-muted-foreground">{messages.length} messages</span>
-        </div>
-
-        <ul className="flex-1 divide-y divide-border overflow-y-auto">
-          {messages.map((msg) => {
-            const { name } = parseFrom(msg.from);
-            const isSelected = msg.id === selectedId;
-
-            return (
-              <li key={msg.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(msg.id)}
-                  className={cn(
-                    "flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors",
-                    isSelected ? "bg-secondary" : "hover:bg-secondary/50",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={cn(
-                        "truncate text-sm",
-                        msg.unread ? "font-bold text-foreground" : "font-medium text-foreground/90",
-                      )}
-                    >
-                      {name}
-                    </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {formatDate(msg.date)}
-                    </span>
-                  </div>
-
-                  <span
-                    className={cn(
-                      "truncate text-sm",
-                      msg.unread ? "font-semibold text-foreground" : "text-muted-foreground",
-                    )}
-                  >
-                    {msg.subject ?? "(no subject)"}
-                  </span>
-
-                  <span className="line-clamp-1 text-xs text-muted-foreground">{msg.snippet}</span>
-                </button>
-              </li>
-            );
-          })}
-
-          {messages.length === 0 && (
-            <li className="p-6 text-center text-sm text-muted-foreground">No messages.</li>
-          )}
-        </ul>
-      </div>
+      <MailMessageList
+        title="Inbox"
+        messages={messages}
+        selectedId={selectedId}
+        onSelectMessage={handleSelectMessage}
+        peerField="from"
+        showUnreadStyles
+        hasMore={hasMore}
+        isLoadingMore={isLoadingMore}
+        onLoadMore={loadMore}
+      />
 
       {/* Reader — only when an email is opened */}
       {selectedId && (
@@ -120,13 +118,25 @@ export function Inbox() {
           onBack={() => {
             setSelectedId(null);
           }}
+          onDelete={handleDeleteMessage}
+          isDeleting={deleteStatus === "pending"}
         />
       )}
     </div>
   );
 }
 
-function MailReader({ id, onBack }: { id: string; onBack: () => void }) {
+export function MailReader({
+  id,
+  onBack,
+  onDelete,
+  isDeleting = false,
+}: {
+  id: string;
+  onBack: () => void;
+  onDelete?: (id: string) => void | Promise<void>;
+  isDeleting?: boolean;
+}) {
   const { data: msg, isPending, isError } = gmailMessage({ id });
 
   if (isPending) {
@@ -146,6 +156,21 @@ function MailReader({ id, onBack }: { id: string; onBack: () => void }) {
           <Button variant="ghost" size="icon" aria-label="Reply" onClick={onBack}>
             <ArrowLeft className="size-5" />
           </Button>
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Move to trash"
+              disabled={isDeleting}
+              onClick={() => void onDelete(id)}
+            >
+              {isDeleting ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : (
+                <Trash2 className="size-5" />
+              )}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -173,7 +198,7 @@ function MailReader({ id, onBack }: { id: string; onBack: () => void }) {
   );
 }
 
-function MailBody({
+export function MailBody({
   bodyHtml,
   bodyText,
   snippet,

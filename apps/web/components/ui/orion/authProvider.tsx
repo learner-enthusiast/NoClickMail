@@ -28,8 +28,9 @@ type AuthContextValue = {
 const AUTHENTICATED_ROUTES = [
   "/dashboard/inbox",
   "/dashboard/calendar",
-  "/dashboard/contacts",
-  "/dashboard/settings",
+  "/dashboard/sent",
+  "/dashboard/drafts",
+  "/dashboard/trash",
 ];
 function isAuthenticatedRoute(pathname: string) {
   return AUTHENTICATED_ROUTES.some(

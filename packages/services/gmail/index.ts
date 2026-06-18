@@ -14,8 +14,11 @@ import type {
   ListSentContactsInputModelType,
   ListSentContactsOutputModelType,
   ListSentInputModelType,
+  ListTrashInputModelType,
   MarkMessageReadInputModelType,
   MarkMessageReadOutputModelType,
+  RestoreMessageInputModelType,
+  RestoreMessageOutputModelType,
   SendMessageInputModelType,
   SendMessageOutputModelType,
 } from "./model";
@@ -55,7 +58,7 @@ class GmailService {
       ids.map(async (id) => {
         const msg = (await gmail.messages.get({
           id,
-          format: "metadata",
+          format: "full",
           metadataHeaders: ["From", "To", "Subject", "Date"],
         })) as GmailMessage;
         return this.toSummary(msg);
@@ -295,6 +298,41 @@ class GmailService {
     });
 
     return { success: true };
+  }
+  async listTrash(
+    tenantId: string,
+    input: ListTrashInputModelType,
+  ): Promise<ListMessagesOutputModelType> {
+    return this.listByLabels(tenantId, input, ["TRASH"]);
+  }
+  private restoredLocation(summary: GmailMessageSummaryType): "inbox" | "sent" | "draft" | "other" {
+    if (summary.draft) return "draft";
+    if (summary.inInbox) return "inbox";
+    if (summary.sent) return "sent";
+    return "other";
+  }
+
+  async restoreMessage(
+    tenantId: string,
+    input: RestoreMessageInputModelType,
+  ): Promise<RestoreMessageOutputModelType> {
+    const gmail = this.gmail(tenantId);
+
+    // Removes TRASH; Gmail restores to original folder from remaining labels
+    await gmail.messages.untrash({ id: input.id });
+
+    const msg = (await gmail.messages.get({
+      id: input.id,
+      format: "metadata",
+      metadataHeaders: ["From", "To", "Subject", "Date"],
+    })) as GmailMessage;
+
+    const summary = this.toSummary(msg);
+
+    return {
+      success: true,
+      restoredTo: this.restoredLocation(summary),
+    };
   }
 }
 

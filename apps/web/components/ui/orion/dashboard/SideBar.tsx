@@ -7,12 +7,13 @@ import {
   LayoutGrid,
   Inbox,
   Calendar,
-  Users,
-  Settings,
   Plus,
   HelpCircle,
   LogOut,
   type LucideIcon,
+  DraftingCompass,
+  MessageCircle,
+  Trash,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { useAuth } from "~/components/ui/orion/authProvider";
@@ -22,8 +23,9 @@ const NAV_ITEMS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "Workspace", href: "/dashboard/workspace", icon: LayoutGrid },
   { label: "Inbox", href: "/dashboard/inbox", icon: Inbox },
   { label: "Calendar", href: "/dashboard/calendar", icon: Calendar },
-  { label: "Contacts", href: "/dashboard/contacts", icon: Users },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings },
+  { label: "Drafts", href: "/dashboard/drafts", icon: DraftingCompass },
+  { label: "Sent", href: "/dashboard/sent", icon: MessageCircle },
+  { label: "Trash", href: "/dashboard/trash", icon: Trash },
 ];
 
 function SideBarLink({ label, href, icon: Icon }: (typeof NAV_ITEMS)[number]) {

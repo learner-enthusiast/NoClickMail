@@ -136,7 +136,8 @@ export const deleteMessageInputModel = z.object({
   isDraft: z.boolean().default(false).describe("true = use drafts.delete instead of messages.*"),
 });
 export type DeleteMessageInputModelType = z.infer<typeof deleteMessageInputModel>;
-
+export const listTrashInputModel = listMessagesPaginationModel;
+export type ListTrashInputModelType = z.infer<typeof listTrashInputModel>;
 export const deleteMessageOutputModel = gmailSuccessOutputModel;
 export type DeleteMessageOutputModelType = z.infer<typeof deleteMessageOutputModel>;
 
@@ -149,3 +150,16 @@ export type MarkMessageReadInputModelType = z.infer<typeof markMessageReadInputM
 
 export const markMessageReadOutputModel = gmailSuccessOutputModel;
 export type MarkMessageReadOutputModelType = z.infer<typeof markMessageReadOutputModel>;
+/** PATCH /gmail/message/restore */
+export const restoreMessageInputModel = z.object({
+  id: z.string().describe("Gmail message id"),
+});
+export type RestoreMessageInputModelType = z.infer<typeof restoreMessageInputModel>;
+
+export const restoreMessageOutputModel = z.object({
+  success: z.boolean(),
+  restoredTo: z
+    .enum(["inbox", "sent", "draft", "other"])
+    .describe("Where Gmail put the message after restore"),
+});
+export type RestoreMessageOutputModelType = z.infer<typeof restoreMessageOutputModel>;

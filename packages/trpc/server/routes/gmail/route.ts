@@ -11,8 +11,11 @@ import {
   listSentContactsInputModel,
   listSentContactsOutputModel,
   listSentInputModel,
+  listTrashInputModel,
   markMessageReadInputModel,
   markMessageReadOutputModel,
+  restoreMessageInputModel,
+  restoreMessageOutputModel,
   sendMessageInputModel,
   sendMessageOutputModel,
 } from "@repo/services/gmail/model";
@@ -68,4 +71,14 @@ export const gmailRouter = router({
     .input(markMessageReadInputModel)
     .output(markMessageReadOutputModel)
     .mutation(({ ctx, input }) => gmailService.markMessageRead(ctx.user, input)),
+  listTrash: authenticatedProcedure
+    .meta({ openapi: { method: "GET", path: getPath("/trash"), tags: TAGS } })
+    .input(listTrashInputModel)
+    .output(listMessagesOutputModel)
+    .query(({ ctx, input }) => gmailService.listTrash(ctx.user, input)),
+  restoreMessage: authenticatedProcedure
+    .meta({ openapi: { method: "PATCH", path: getPath("/message/restore"), tags: TAGS } })
+    .input(restoreMessageInputModel)
+    .output(restoreMessageOutputModel)
+    .mutation(({ ctx, input }) => gmailService.restoreMessage(ctx.user, input)),
 });

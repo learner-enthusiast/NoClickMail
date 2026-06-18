@@ -10,7 +10,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full">
+    <div className="flex min-h-full w-full">
       <RealtimeSync />
       <div className="w-[15%]">
         <SideBar />

@@ -296,6 +296,9 @@ importers:
       '@repo/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
+      '@repo/services':
+        specifier: workspace:*
+        version: link:../../packages/services
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
