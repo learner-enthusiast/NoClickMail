@@ -1,135 +1,368 @@
-# Turborepo starter
+# Orion
 
-This Turborepo starter is maintained by the Turborepo core team.
+**Quiet Intelligence** — an AI-powered executive assistant for Gmail and Google Calendar.
 
-## Using this example
+Orion connects to your Google accounts, syncs mail and events in real time, and gives you an AI assistant that can summarize threads, draft replies, and schedule meetings — from one dashboard.
 
-Run the following command:
+**Live:** [orion.arnabsamanta.in](https://orion.arnabsamanta.in)
 
-```sh
-npx create-turbo@latest
-```
+---
 
-## What's inside?
+## Tech stack
 
-This Turborepo includes the following packages/apps:
+Next.js 16, React 19, TypeScript, Tailwind CSS v4, tRPC v11, TanStack React Query, Express 5, PostgreSQL, Drizzle ORM, Corsair (Gmail + Calendar), OpenAI Agents, Google OAuth, SSE, pnpm, Turborepo
 
-### Apps and Packages
+---
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
+## Monorepo structure
 
 ```
-cd my-turborepo
+apps/
+  web/          Next.js frontend (dashboard, inbox, calendar, AI chat)
+  api/          Express API (tRPC, OAuth, webhooks, SSE)
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+packages/
+  trpc/         tRPC routers, auth middleware, procedures
+  services/     Gmail, Calendar, Chat/Agent, Corsair, User services
+  database/     Drizzle schema, migrations, Postgres client
+  logger/       Structured logging
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+---
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+## Prerequisites
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+- **Node.js** ≥ 18
+- **pnpm** 9 (`corepack enable && corepack prepare pnpm@9.0.0 --activate`)
+- **Docker** (for local Postgres) or a hosted Postgres URL (Neon, Supabase, etc.)
+- **Google Cloud project** with OAuth credentials + Gmail Pub/Sub (for push sync)
+- **OpenAI API key** (for Orion Intelligence chat)
 
-### Develop
+---
 
-To develop all apps and packages, run the following command:
+## Quick start (local)
 
-```
-cd my-turborepo
+### 1. Clone and install
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
+```bash
+git clone <repo-url>
+cd trpc-monorepo
+pnpm install
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+### 2. Environment
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+```bash
+cp .env.example .env
 ```
 
-### Remote Caching
+Fill in `.env` — see [Environment variables](#environment-variables) below.
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+### 3. Start Postgres
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
+```bash
+docker compose up -d
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+Default local URL: `postgresql://postgres:postgres@localhost:5432/dev`
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+### 4. Run migrations
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
+```bash
+pnpm db:migrate
 ```
 
-## Useful Links
+### 5. Corsair setup (required once per database)
 
-Learn more about the power of Turborepo:
+Creates `corsair_integrations` rows and stores encrypted Google OAuth credentials for Gmail and Calendar plugins:
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+```bash
+pnpm --filter @repo/api corsair:setup
+```
+
+You should see `✓ gmail` and `✓ googlecalendar` in the output.
+
+### 6. Start dev servers
+
+```bash
+pnpm dev
+```
+
+| Service | URL |
+|---------|-----|
+| Web | http://localhost:3000 |
+| API | http://localhost:8000 |
+| tRPC | http://localhost:8000/trpc |
+| API docs | http://localhost:8000/docs |
+
+### 7. First-time app flow
+
+1. Open http://localhost:3000 → **Sign in with Google**
+2. In the header, open **Connections** (refresh icon) → **Connect** Gmail and Google Calendar
+3. Open **Inbox** / **Calendar** — data loads via Corsair
+4. Use **Orion Intelligence** (right panel) to summarize, draft, or create calendar invites
+
+---
+
+## Environment variables
+
+Copy `.env.example` to `.env` at the **repo root**. All apps and packages load from this file.
+
+### Database
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | Postgres connection string. Local: `postgresql://postgres:postgres@localhost:5432/dev`. For Neon/Supabase use the pooled URL at runtime. |
+
+**Migrations on hosted Postgres:** use a **direct** (non-pooler) URL when running `pnpm db:migrate`, e.g. `DATABASE_URL_DIRECT` — Neon pooler URLs can fail on DDL.
+
+---
+
+### API server
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PORT` | No | API port (default `8000`) |
+| `BASE_URL` | No | Public API base URL (default `http://localhost:8000`) |
+| `CLIENT_URL` | Yes | Web app URL — used for OAuth redirects after login/connect |
+| `CORS_ORIGIN` | Yes | Web origin allowed for credentialed tRPC requests (must match `CLIENT_URL` exactly) |
+| `NODE_ENV` | No | `development` \| `prod` \| `production` — controls secure cookies |
+
+---
+
+### JWT auth
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ACCESS_TOKEN_SECRET` | Yes | Min 32 chars — `openssl rand -base64 32` |
+| `REFRESH_TOKEN_SECRET` | Yes | Min 32 chars — separate from access secret |
+| `ACCESS_TOKEN_EXPIRY` | No | Default `1d` |
+| `REFRESH_TOKEN_EXPIRY` | No | Default `30d` |
+
+---
+
+### Frontend
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_API_URL` | Yes | Browser tRPC endpoint, e.g. `http://localhost:8000/trpc`. **Baked in at build time** — rebuild web after changing. |
+| `API_INTERNAL_URL` | No | Server-side Next.js → API URL (OAuth proxy route). Default `http://localhost:8000` |
+
+---
+
+### Google OAuth — sign-in
+
+Used for **logging into Orion** (not the same flow as connecting Gmail in the dashboard).
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_OAUTH_CLIENT_ID` | Yes | From [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials) |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Yes | OAuth 2.0 client secret |
+| `GOOGLE_OAUTH_REDIRECT_URI` | Yes | Must match a **Authorized redirect URI** in Google Console exactly |
+
+**Local dev (API-direct callback — recommended):**
+
+```
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/auth/google/callback
+```
+
+**Production (split subdomains — web on `orion.*`, API on `orionserver.*`):**
+
+```
+GOOGLE_OAUTH_REDIRECT_URI=https://orionserver.arnabsamanta.in/auth/google/callback
+CLIENT_URL=https://orion.arnabsamanta.in
+CORS_ORIGIN=https://orion.arnabsamanta.in
+NEXT_PUBLIC_API_URL=https://orionserver.arnabsamanta.in/trpc
+```
+
+Cookies are set on the **API host**; the web app calls tRPC on the same API host with `credentials: include`. Subdomains of the same domain (e.g. `*.arnabsamanta.in`) are same-site and work with `SameSite=Strict`.
+
+---
+
+### OpenAI
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | Yes | Powers Orion Intelligence (summarize, draft, agent chat) |
+
+---
+
+### Corsair — Gmail & Calendar
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `CORSAIR_KEK` | Yes | Encryption key for stored tokens, min 32 chars — `openssl rand -base64 32` |
+| `CORSAIR_CONNECT_REDIRECT_URI` | Yes | API OAuth callback for connect flow: `http://localhost:8000/connect/callback` |
+| `CORSAIR_GMAIL_REDIRECT_URI` | Yes | User-facing redirect after Gmail connect (can match web URL) |
+| `CORSAIR_CALENDAR_REDIRECT_URI` | Yes | User-facing redirect after Calendar connect |
+| `CORSAIR_WEBHOOK_BASE` | Yes | Public **HTTPS** base for webhooks (ngrok in dev, API domain in prod) |
+| `CORSAIR_WEBHOOK_SECRET` | Yes | Min 16 chars — appended as `?token=` on webhook URLs |
+| `GMAIL_PUBSUB_TOPIC_ID` | Yes* | GCP Pub/Sub topic for Gmail push, e.g. `projects/my-project/topics/gmail-push` |
+
+\*Required for Gmail realtime sync via webhooks.
+
+---
+
+### Optional
+
+| Variable | Description |
+|----------|-------------|
+| `LOGGER_LEVEL` | `debug` \| `info` \| `warn` \| `error` |
+| `PUBLIC_OPENAPI_DOCS` | `true` to expose `/docs` |
+| `OPENAPI_DOCS_SECRET` | Protect `/docs` in production |
+| `SKIP_ENV_VALIDATION` | Set `true` for Docker/CI builds without full env |
+
+---
+
+## Google Cloud setup
+
+### A. OAuth client (sign-in + Corsair)
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Credentials**
+2. Create **OAuth 2.0 Client ID** (Web application)
+3. Add **Authorized redirect URIs**:
+
+   **Local:**
+   ```
+   http://localhost:8000/auth/google/callback
+   http://localhost:8000/connect/callback
+   ```
+
+   **Production:**
+   ```
+   https://orionserver.arnabsamanta.in/auth/google/callback
+   https://orionserver.arnabsamanta.in/connect/callback
+   ```
+
+4. Copy **Client ID** and **Client secret** into `.env` as `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`
+
+### B. Enable APIs
+
+In **APIs & Services → Library**, enable:
+
+- Gmail API
+- Google Calendar API
+
+### C. Gmail push notifications (Pub/Sub)
+
+1. Create a **Pub/Sub topic** in the same GCP project
+2. Grant Gmail publish permission on the topic (Google's docs: `gmail-push` setup)
+3. Set `GMAIL_PUBSUB_TOPIC_ID=projects/YOUR_PROJECT/topics/YOUR_TOPIC`
+4. Create a **Push subscription** with endpoint:
+
+   ```
+   https://orionserver.arnabsamanta.in/webhooks/corsair?token=YOUR_CORSAIR_WEBHOOK_SECRET
+   ```
+
+   The URL must **exactly** match:
+   ```
+   ${CORSAIR_WEBHOOK_BASE}/webhooks/corsair?token=${CORSAIR_WEBHOOK_SECRET}
+   ```
+
+5. Enable **authentication** on the push subscription (Google sends a Bearer JWT; the API verifies it)
+
+**Dev:** use ngrok or Cloudflare Tunnel for `CORSAIR_WEBHOOK_BASE` and point the subscription at that HTTPS URL.
+
+### D. OAuth scopes (Corsair connect)
+
+When users click **Connect** in the dashboard, they authorize Gmail and Calendar via `/connect/gmail` and `/connect/googlecalendar`. Uses the same Google OAuth client credentials stored by `corsair:setup`.
+
+---
+
+## Corsair setup (detailed)
+
+Corsair is the integration layer for Gmail and Google Calendar. Before any user can load inbox or calendar data, the **server-side integration records** must exist in Postgres.
+
+### What `corsair:setup` does
+
+```bash
+pnpm --filter @repo/api corsair:setup
+```
+
+Script: `apps/api/src/scripts/corsair-setup.ts`
+
+1. Runs `setupCorsair()` — creates rows in `corsair_integrations` for `gmail` and `googlecalendar`
+2. Encrypts and stores `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` per integration (using `CORSAIR_KEK`)
+
+### When to re-run
+
+- Fresh database / after `db:migrate` on empty DB
+- Changed `CORSAIR_KEK` (will need re-setup)
+- Changed Google OAuth client credentials
+
+### Per-user connect (after setup)
+
+1. User signs in to Orion
+2. Header → **Connections** → **Connect** on Gmail / Google Calendar
+3. Browser → `GET /connect/gmail` or `/connect/googlecalendar` (API)
+4. Google OAuth → `GET /connect/callback` → tokens stored per user (`tenantId` = user id)
+5. Gmail watch + Calendar watch registered (webhooks)
+
+### Troubleshooting: `Integration "gmail" not found`
+
+Means `corsair:setup` was not run on this database. Run it and restart the API.
+
+---
+
+## Production deployment
+
+Example split-host setup:
+
+| Role | Host |
+|------|------|
+| Web | `https://orion.arnabsamanta.in` |
+| API | `https://orionserver.arnabsamanta.in` |
+
+### Checklist
+
+- [ ] `pnpm db:migrate` on production DB (use direct URL for migrate)
+- [ ] `pnpm --filter @repo/api corsair:setup` on production DB
+- [ ] API env: `NODE_ENV=prod`, `CLIENT_URL`, `CORS_ORIGIN`, `CORSAIR_WEBHOOK_*`
+- [ ] Web env: `NEXT_PUBLIC_API_URL=https://orionserver.../trpc` → **rebuild web**
+- [ ] Google Console redirect URIs updated for production API host
+- [ ] Pub/Sub push subscription points to production webhook URL
+- [ ] nginx forwards `Authorization` header for Pub/Sub: `proxy_set_header Authorization $http_authorization;`
+- [ ] PM2 / process manager restarts after env changes
+
+Deploy workflow (`.github/workflows/deploy.yml`): `git pull` → `pnpm install` → `pnpm db:migrate` → `pnpm build` → `pm2 restart all`
+
+---
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start web + API in dev mode |
+| `pnpm build` | Build all apps |
+| `pnpm db:migrate` | Apply Drizzle migrations |
+| `pnpm db:generate` | Generate migration from schema changes |
+| `pnpm --filter @repo/api corsair:setup` | Initialize Corsair integrations |
+| `pnpm lint` | Lint all packages |
+| `pnpm check-types` | Typecheck all packages |
+
+---
+
+## Architecture notes
+
+- **Auth:** JWT in httpOnly cookies on API host; CSRF token for tRPC mutations
+- **Realtime:** SSE at `/events/stream` — Gmail/Calendar webhooks notify connected clients
+- **AI:** `agent.runAgent` tRPC mutation → OpenAI via `@openai/agents`
+- **Rate limiting:** Express limiters on `/auth`, `/connect`, `/trpc`; tRPC limits on auth + agent procedures
+
+---
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| `auth.me` 401 after Google login | Align `GOOGLE_OAUTH_REDIRECT_URI` (API host), `CORS_ORIGIN`, `CLIENT_URL`, `NEXT_PUBLIC_API_URL`; see [Google OAuth](#google-oauth--sign-in) |
+| `Integration "gmail" not found` | Run `pnpm --filter @repo/api corsair:setup` |
+| Webhook 401 | `CORSAIR_WEBHOOK_BASE` + `?token=` must match Pub/Sub subscription URL exactly; check nginx passes `Authorization` |
+| SSL DB errors (Neon) | Use SSL connection string; see `packages/database/pg.ts` |
+| `NEXT_PUBLIC_*` not updating | Rebuild web app after env change |
+
+---
+
+## License
+
+Private — All rights reserved.
