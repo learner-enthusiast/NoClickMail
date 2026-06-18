@@ -13,9 +13,16 @@ export const gmailMessageSummaryModel = z.object({
   threadId: z.string(),
   snippet: z.string(),
   from: z.string().nullable(),
+  to: z.string().nullable(),
   subject: z.string().nullable(),
   date: z.string().nullable(),
   unread: z.boolean(),
+  starred: z.boolean(),
+  important: z.boolean(),
+  draft: z.boolean(),
+  sent: z.boolean(),
+  inInbox: z.boolean(),
+  trashed: z.boolean(),
   labelIds: z.array(z.string()),
 });
 export type GmailMessageSummaryType = z.infer<typeof gmailMessageSummaryModel>;
@@ -94,3 +101,51 @@ export const listSentContactsOutputModel = z.object({
   contacts: z.array(contactSuggestionModel),
 });
 export type ListSentContactsOutputModelType = z.infer<typeof listSentContactsOutputModel>;
+// packages/services/gmail/model.ts
+
+export const listMessagesPaginationModel = z.object({
+  maxResults: z.number().int().min(1).max(100).default(20),
+  pageToken: z.string().optional(),
+  q: z.string().optional(),
+});
+
+// inbox — unchanged shape, same defaults
+
+export const listSentInputModel = listMessagesPaginationModel;
+export const listDraftsInputModel = listMessagesPaginationModel;
+
+export const listMessagesOutputModel = z.object({
+  messages: z.array(gmailMessageSummaryModel),
+  nextPageToken: z.string().optional(),
+});
+
+export type ListSentInputModelType = z.infer<typeof listSentInputModel>;
+export type ListDraftsInputModelType = z.infer<typeof listDraftsInputModel>;
+export type ListMessagesPaginationModelType = z.infer<typeof listMessagesPaginationModel>;
+export type ListMessagesOutputModelType = z.infer<typeof listMessagesOutputModel>;
+/** Shared mutation success */
+export const gmailSuccessOutputModel = z.object({
+  success: z.boolean(),
+});
+export type GmailSuccessOutputModelType = z.infer<typeof gmailSuccessOutputModel>;
+
+/** DELETE /gmail/message */
+export const deleteMessageInputModel = z.object({
+  id: z.string().describe("Gmail message id (or draft id if isDraft)"),
+  permanent: z.boolean().default(false).describe("false = trash, true = delete forever"),
+  isDraft: z.boolean().default(false).describe("true = use drafts.delete instead of messages.*"),
+});
+export type DeleteMessageInputModelType = z.infer<typeof deleteMessageInputModel>;
+
+export const deleteMessageOutputModel = gmailSuccessOutputModel;
+export type DeleteMessageOutputModelType = z.infer<typeof deleteMessageOutputModel>;
+
+/** PATCH /gmail/message/read */
+export const markMessageReadInputModel = z.object({
+  id: z.string().describe("Gmail message id"),
+  read: z.boolean().default(true).describe("true = mark read, false = mark unread"),
+});
+export type MarkMessageReadInputModelType = z.infer<typeof markMessageReadInputModel>;
+
+export const markMessageReadOutputModel = gmailSuccessOutputModel;
+export type MarkMessageReadOutputModelType = z.infer<typeof markMessageReadOutputModel>;

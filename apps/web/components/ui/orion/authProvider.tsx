@@ -104,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     await utils.client.auth.logout.query();
     utils.auth.me.reset();
-    router.replace("/api-auth/login");
+    router.replace("/");
   }, [router, utils]);
 
   const value = useMemo<AuthContextValue>(

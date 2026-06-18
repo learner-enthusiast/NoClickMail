@@ -1,13 +1,21 @@
 import { corsair } from "../corsair";
 import type {
   ContactSuggestionModelType,
+  DeleteMessageInputModelType,
+  DeleteMessageOutputModelType,
   GetMessageInputModelType,
   GmailMessageDetailType,
   GmailMessageSummaryType,
+  ListDraftsInputModelType,
   ListInboxInputModelType,
   ListInboxOutputModelType,
+  ListMessagesOutputModelType,
+  ListMessagesPaginationModelType,
   ListSentContactsInputModelType,
   ListSentContactsOutputModelType,
+  ListSentInputModelType,
+  MarkMessageReadInputModelType,
+  MarkMessageReadOutputModelType,
   SendMessageInputModelType,
   SendMessageOutputModelType,
 } from "./model";
@@ -30,37 +38,44 @@ class GmailService {
   private gmail(tenantId: string) {
     return corsair.withTenant(tenantId).gmail.api;
   }
+  private async listByLabels(
+    tenantId: string,
+    input: ListMessagesPaginationModelType,
+    labelIds: string[],
+  ): Promise<ListMessagesOutputModelType> {
+    const gmail = this.gmail(tenantId);
+    const list = await gmail.messages.list({
+      labelIds,
+      maxResults: input.maxResults,
+      pageToken: input.pageToken,
+      q: input.q,
+    });
+    const ids = (list.messages ?? []).map((m) => m.id).filter(Boolean) as string[];
+    const messages = await Promise.all(
+      ids.map(async (id) => {
+        const msg = (await gmail.messages.get({
+          id,
+          format: "metadata",
+          metadataHeaders: ["From", "To", "Subject", "Date"],
+        })) as GmailMessage;
+        return this.toSummary(msg);
+      }),
+    );
+    return { messages, nextPageToken: list.nextPageToken };
+  }
 
   async listInbox(
     tenantId: string,
     input: ListInboxInputModelType,
   ): Promise<ListInboxOutputModelType> {
-    const gmail = this.gmail(tenantId);
-
-    const list = await gmail.messages.list({
-      labelIds: ["INBOX"],
-      maxResults: input.maxResults,
-      pageToken: input.pageToken,
-      q: input.q,
-    });
-
-    const ids = (list.messages ?? []).map((m) => m.id).filter((id): id is string => !!id);
-
-    // messages.list only returns ids — fetch metadata for each to get headers.
-    const messages = await Promise.all(
-      ids.map(async (id) => {
-        const msg = (await gmail.messages.get({
-          id,
-          format: "full",
-          metadataHeaders: ["From", "Subject", "Date"],
-        })) as GmailMessage;
-        return this.toSummary(msg);
-      }),
-    );
-
-    return { messages, nextPageToken: list.nextPageToken };
+    return this.listByLabels(tenantId, input, ["INBOX"]);
   }
-
+  async listSent(
+    tenantId: string,
+    input: ListSentInputModelType,
+  ): Promise<ListMessagesOutputModelType> {
+    return this.listByLabels(tenantId, input, ["SENT"]);
+  }
   async getMessage(
     tenantId: string,
     input: GetMessageInputModelType,
@@ -96,9 +111,16 @@ class GmailService {
       threadId: msg.threadId ?? "",
       snippet: msg.snippet ?? "",
       from: this.header(msg, "From"),
+      to: this.header(msg, "To"),
       subject: this.header(msg, "Subject"),
       date: this.header(msg, "Date"),
       unread: labelIds.includes("UNREAD"),
+      starred: labelIds.includes("STARRED"),
+      important: labelIds.includes("IMPORTANT"),
+      draft: labelIds.includes("DRAFT"),
+      sent: labelIds.includes("SENT"),
+      inInbox: labelIds.includes("INBOX"),
+      trashed: labelIds.includes("TRASH"),
       labelIds,
     };
   }
@@ -216,6 +238,63 @@ class GmailService {
     }
 
     return results;
+  }
+  async listDrafts(
+    tenantId: string,
+    input: ListDraftsInputModelType,
+  ): Promise<ListMessagesOutputModelType> {
+    const gmail = this.gmail(tenantId);
+
+    const list = await gmail.drafts.list({
+      maxResults: input.maxResults,
+      pageToken: input.pageToken,
+      q: input.q,
+    });
+
+    const drafts = list.drafts ?? [];
+    const messages = await Promise.all(
+      drafts.map(async (d) => {
+        const full = await gmail.drafts.get({ id: d.id!, format: "metadata" });
+        const msg = full.message as GmailMessage;
+        return this.toSummary({ ...msg, id: d.id! }); // draft id for delete/update
+      }),
+    );
+
+    return { messages, nextPageToken: list.nextPageToken };
+  }
+  async deleteMessage(
+    tenantId: string,
+    input: DeleteMessageInputModelType,
+  ): Promise<DeleteMessageOutputModelType> {
+    const gmail = this.gmail(tenantId);
+
+    if (input.isDraft) {
+      await gmail.drafts.delete({ id: input.id });
+      return { success: true };
+    }
+
+    if (input.permanent) {
+      await gmail.messages.delete({ id: input.id });
+    } else {
+      await gmail.messages.trash({ id: input.id });
+    }
+
+    return { success: true };
+  }
+
+  async markMessageRead(
+    tenantId: string,
+    input: MarkMessageReadInputModelType,
+  ): Promise<MarkMessageReadOutputModelType> {
+    const gmail = this.gmail(tenantId);
+
+    await gmail.messages.modify({
+      id: input.id,
+      addLabelIds: input.read ? [] : ["UNREAD"],
+      removeLabelIds: input.read ? ["UNREAD"] : [],
+    });
+
+    return { success: true };
   }
 }
 

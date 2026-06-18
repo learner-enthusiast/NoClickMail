@@ -1,11 +1,18 @@
 import { gmailService } from "../../services";
 import {
+  deleteMessageInputModel,
+  deleteMessageOutputModel,
   getMessageInputModel,
   gmailMessageDetailModel,
+  listDraftsInputModel,
   listInboxInputModel,
   listInboxOutputModel,
+  listMessagesOutputModel,
   listSentContactsInputModel,
   listSentContactsOutputModel,
+  listSentInputModel,
+  markMessageReadInputModel,
+  markMessageReadOutputModel,
   sendMessageInputModel,
   sendMessageOutputModel,
 } from "@repo/services/gmail/model";
@@ -38,4 +45,27 @@ export const gmailRouter = router({
     .input(listSentContactsInputModel)
     .output(listSentContactsOutputModel)
     .query(({ ctx, input }) => gmailService.listSentContacts(ctx.user, input)),
+  listSentMessages: authenticatedProcedure
+    .meta({ openapi: { method: "GET", path: getPath("/sent-messages"), tags: TAGS } })
+    .input(listSentInputModel)
+    .output(listMessagesOutputModel)
+    .query(({ ctx, input }) => gmailService.listSent(ctx.user, input)),
+
+  listDraftMessages: authenticatedProcedure
+    .meta({ openapi: { method: "GET", path: getPath("/draft-messages"), tags: TAGS } })
+    .input(listDraftsInputModel)
+    .output(listMessagesOutputModel)
+    .query(({ ctx, input }) => gmailService.listDrafts(ctx.user, input)),
+
+  deleteMessage: authenticatedProcedure
+    .meta({ openapi: { method: "DELETE", path: getPath("/message"), tags: TAGS } })
+    .input(deleteMessageInputModel)
+    .output(deleteMessageOutputModel)
+    .mutation(({ ctx, input }) => gmailService.deleteMessage(ctx.user, input)),
+
+  markMessageRead: authenticatedProcedure
+    .meta({ openapi: { method: "PATCH", path: getPath("/message/read"), tags: TAGS } })
+    .input(markMessageReadInputModel)
+    .output(markMessageReadOutputModel)
+    .mutation(({ ctx, input }) => gmailService.markMessageRead(ctx.user, input)),
 });

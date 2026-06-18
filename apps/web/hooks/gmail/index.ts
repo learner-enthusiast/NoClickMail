@@ -12,3 +12,13 @@ export const sendGmailMessage = () => pickMutationState(trpc.gmail.send.useMutat
 // apps/web/hooks/gmail/index.ts
 export const gmailSentContacts = (input?: RouterInputs["gmail"]["sentContacts"], enabled = true) =>
   pickQueryState(trpc.gmail.sentContacts.useQuery(input ?? {}, { enabled }));
+export const gmailListSentMessages = (input?: RouterInputs["gmail"]["listSentMessages"]) =>
+  pickQueryState(trpc.gmail.listSentMessages.useQuery(input ?? {}));
+
+export const gmailListDraftMessages = (input?: RouterInputs["gmail"]["listDraftMessages"]) =>
+  pickQueryState(trpc.gmail.listDraftMessages.useQuery(input ?? {}));
+
+export const deleteGmailMessage = () => pickMutationState(trpc.gmail.deleteMessage.useMutation());
+
+export const markGmailMessageRead = () =>
+  pickMutationState(trpc.gmail.markMessageRead.useMutation());
