@@ -1,5 +1,5 @@
 import z from "zod";
-import { authenticatedProcedure, csrfProtectedProcedure, router } from "../../trpc";
+import { agentProcedure, authenticatedProcedure, csrfProtectedProcedure, router } from "../../trpc";
 import { generatePath } from "../../utils/path-generator";
 import { chatService, CorsairAgent } from "../../services";
 import { zodUndefinedModel } from "../../schema";
@@ -8,7 +8,7 @@ const TAGS = ["Agent"];
 const getPath = generatePath("/agent");
 
 export const agentsRouter = router({
-  runAgent: csrfProtectedProcedure
+  runAgent: agentProcedure
     .input(z.object({ prompt: z.string().min(1), threadId: z.string().uuid().optional() }))
     .output(z.object({ output: z.string(), threadId: z.string() }))
     .mutation(async ({ ctx, input }) => {

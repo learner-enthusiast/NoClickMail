@@ -10,6 +10,7 @@ import {
 import { GenerateUSerTokenPayload } from "@repo/services/user/model";
 import { env } from "@repo/services/env";
 import { toTRPCError } from "./map-error";
+import { checkRateLimit, type RateLimitOptions } from "./rate-limit";
 
 export const tRPCContext = initTRPC
   .meta<OpenApiMeta>()
@@ -71,3 +72,23 @@ export const csrfProtectedProcedure = authenticatedProcedure.use((options) => {
 
   return options.next();
 });
+function createRateLimitMiddleware(opts: RateLimitOptions) {
+  return tRPCContext.middleware(async ({ ctx, next }) => {
+    const user = "user" in ctx ? (ctx as { user?: string }).user : undefined;
+    const key = opts.key({ ip: ctx.ip, user });
+    checkRateLimit(key, opts.max, opts.windowMs);
+    return next();
+  });
+}
+export const ipAuthRateLimit = createRateLimitMiddleware({
+  max: 5,
+  windowMs: 15 * 60 * 1000,
+  key: ({ ip }) => `auth:ip:${ip}`,
+});
+export const userAgentRateLimit = createRateLimitMiddleware({
+  max: 20,
+  windowMs: 60 * 1000,
+  key: ({ user, ip }) => `agent:user:${user ?? ip}`,
+});
+export const authPublicProcedure = publicProcedure.use(ipAuthRateLimit);
+export const agentProcedure = csrfProtectedProcedure.use(userAgentRateLimit);

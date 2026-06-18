@@ -6,12 +6,14 @@ export interface TRPCContext {
   getCookie: ReturnType<typeof getCookieFactory>;
   clearCookie: ReturnType<typeof clearCookieFactory>;
   getHeader: (name: string) => string | undefined;
+  ip: string;
 }
 
 export async function createContext({
   req,
   res,
 }: CreateExpressContextOptions): Promise<TRPCContext> {
+  const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
   const ctx: TRPCContext = {
     createCookie: createCookieFactory(res),
     getCookie: getCookieFactory(req),
@@ -20,6 +22,7 @@ export async function createContext({
       const value = req.headers[name.toLowerCase()];
       return Array.isArray(value) ? value[0] : value;
     },
+    ip,
   };
   return ctx;
 }

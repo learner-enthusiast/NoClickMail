@@ -21,3 +21,5 @@ export const badRequest = (msg: string) => new AppError(msg, "BAD_REQUEST");
 
 export const internal = (msg = "Something went wrong") =>
   new AppError(msg, "INTERNAL_SERVER_ERROR");
+export const tooManyRequests = (msg = "Too many requests") =>
+  new AppError(msg, "TOO_MANY_REQUESTS");

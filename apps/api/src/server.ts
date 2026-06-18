@@ -14,6 +14,7 @@ import { googleAuthRouter } from "./routes.ts/google-auth";
 import { corsairAuthRouter } from "./routes.ts/corsair-auth";
 import { webhookRouter } from "./routes.ts/webhooks";
 import { eventsRouter } from "./routes.ts/events";
+import { apiLimiter } from "./middleware/rate-limit";
 
 export const app = express();
 const openApiDocument = generateOpenApiDocument(serverRouter, {
@@ -83,6 +84,7 @@ app.use("/webhooks", webhookRouter);
 app.use("/events", eventsRouter);
 app.use(
   "/api",
+  apiLimiter,
   createOpenApiExpressMiddleware({
     router: serverRouter,
     createContext,
@@ -91,6 +93,7 @@ app.use(
 
 app.use(
   "/trpc",
+  apiLimiter,
   trpcExpress.createExpressMiddleware({
     router: serverRouter,
     createContext,
