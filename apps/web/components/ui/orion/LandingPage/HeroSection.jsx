@@ -1,8 +1,9 @@
+"use client";
 import React from "react";
 import { Button } from "../../button";
 import Image from "next/image";
 import { InViewAnnotation } from "../glitches/glitches";
-import { useRouter } from "next/router";
+import { useRouter } from "next/navigation";
 
 const HeroSection = () => {
   const router = useRouter();
