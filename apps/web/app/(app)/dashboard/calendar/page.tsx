@@ -21,6 +21,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import { calendarEvents } from "~/hooks/calendar";
+import { RequireConnection } from "~/components/ui/orion/glitches/RequireConnection";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -83,123 +84,125 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="space-y-4 p-4 md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-headline-sm font-bold text-foreground">Calendar</h1>
-          <p className="text-body-sm text-muted-foreground">Day / Week / Month views</p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => shift(-1)} aria-label="Previous">
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Button variant="outline" size="icon" onClick={() => shift(1)} aria-label="Next">
-            <ChevronRight className="size-4" />
-          </Button>
-          <Button variant="outline" onClick={() => setAnchorDate(new Date())}>
-            Today
-          </Button>
-        </div>
-      </div>
-
-      <Tabs value={mode} onValueChange={(v) => setMode(v as ViewMode)}>
-        <TabsList>
-          <TabsTrigger value="day">Day</TabsTrigger>
-          <TabsTrigger value="week">Week</TabsTrigger>
-          <TabsTrigger value="month">Month</TabsTrigger>
-        </TabsList>
-
-        {/* Day */}
-        <TabsContent value="day">
-          <Card>
-            <CardHeader>
-              <CardTitle>{format(anchorDate, "EEEE, MMM d")}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <EventState isPending={isPending} isError={isError} onRetry={refetch} />
-              {!isPending && !isError && (
-                <EventList events={selectedDayEvents} emptyText="No events for this day." />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Week */}
-        <TabsContent value="week">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <EventState isPending={isPending} isError={isError} onRetry={refetch} />
-            {!isPending &&
-              !isError &&
-              weekDays.map((day) => {
-                const dayEvents = events.filter((e) => {
-                  const start = parseEventDate(e.start);
-                  return start ? isSameDay(start, day) : false;
-                });
-
-                return (
-                  <Card key={day.toISOString()}>
-                    <CardHeader>
-                      <CardTitle className="text-sm">{format(day, "EEE, MMM d")}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <EventList events={dayEvents} emptyText="No events" compact />
-                    </CardContent>
-                  </Card>
-                );
-              })}
+    <RequireConnection require="googlecalendar">
+      <div className="space-y-4 p-4 md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-headline-sm font-bold text-foreground">Calendar</h1>
+            <p className="text-body-sm text-muted-foreground">Day / Week / Month views</p>
           </div>
-        </TabsContent>
 
-        {/* Month */}
-        <TabsContent value="month">
-          <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => shift(-1)} aria-label="Previous">
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button variant="outline" size="icon" onClick={() => shift(1)} aria-label="Next">
+              <ChevronRight className="size-4" />
+            </Button>
+            <Button variant="outline" onClick={() => setAnchorDate(new Date())}>
+              Today
+            </Button>
+          </div>
+        </div>
+
+        <Tabs value={mode} onValueChange={(v) => setMode(v as ViewMode)}>
+          <TabsList>
+            <TabsTrigger value="day">Day</TabsTrigger>
+            <TabsTrigger value="week">Week</TabsTrigger>
+            <TabsTrigger value="month">Month</TabsTrigger>
+          </TabsList>
+
+          {/* Day */}
+          <TabsContent value="day">
             <Card>
               <CardHeader>
-                <CardTitle>{format(anchorDate, "MMMM yyyy")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Calendar
-                  mode="single"
-                  selected={anchorDate}
-                  onSelect={(d) => d && setAnchorDate(d)}
-                  month={anchorDate}
-                  onMonthChange={setAnchorDate}
-                  modifiers={{ hasEvent: eventDays }}
-                  modifiersClassNames={{
-                    hasEvent:
-                      "relative after:absolute after:bottom-1.5 after:left-1/2 after:size-1 after:-translate-x-1/2 after:rounded-full after:bg-primary",
-                  }}
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {format(anchorDate, "MMMM d")}{" "}
-                  <span className="text-muted-foreground">({format(anchorDate, "EEEE")})</span>
-                </CardTitle>
+                <CardTitle>{format(anchorDate, "EEEE, MMM d")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <EventState isPending={isPending} isError={isError} onRetry={refetch} />
                 {!isPending && !isError && (
-                  <EventList
-                    events={events.filter((e) => {
-                      const start = parseEventDate(e.start);
-                      return start
-                        ? isSameDay(start, anchorDate) && isSameMonth(start, anchorDate)
-                        : false;
-                    })}
-                    emptyText="No events on selected day."
-                  />
+                  <EventList events={selectedDayEvents} emptyText="No events for this day." />
                 )}
               </CardContent>
             </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
-    </div>
+          </TabsContent>
+
+          {/* Week */}
+          <TabsContent value="week">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <EventState isPending={isPending} isError={isError} onRetry={refetch} />
+              {!isPending &&
+                !isError &&
+                weekDays.map((day) => {
+                  const dayEvents = events.filter((e) => {
+                    const start = parseEventDate(e.start);
+                    return start ? isSameDay(start, day) : false;
+                  });
+
+                  return (
+                    <Card key={day.toISOString()}>
+                      <CardHeader>
+                        <CardTitle className="text-sm">{format(day, "EEE, MMM d")}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <EventList events={dayEvents} emptyText="No events" compact />
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+            </div>
+          </TabsContent>
+
+          {/* Month */}
+          <TabsContent value="month">
+            <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{format(anchorDate, "MMMM yyyy")}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Calendar
+                    mode="single"
+                    selected={anchorDate}
+                    onSelect={(d) => d && setAnchorDate(d)}
+                    month={anchorDate}
+                    onMonthChange={setAnchorDate}
+                    modifiers={{ hasEvent: eventDays }}
+                    modifiersClassNames={{
+                      hasEvent:
+                        "relative after:absolute after:bottom-1.5 after:left-1/2 after:size-1 after:-translate-x-1/2 after:rounded-full after:bg-primary",
+                    }}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    {format(anchorDate, "MMMM d")}{" "}
+                    <span className="text-muted-foreground">({format(anchorDate, "EEEE")})</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <EventState isPending={isPending} isError={isError} onRetry={refetch} />
+                  {!isPending && !isError && (
+                    <EventList
+                      events={events.filter((e) => {
+                        const start = parseEventDate(e.start);
+                        return start
+                          ? isSameDay(start, anchorDate) && isSameMonth(start, anchorDate)
+                          : false;
+                      })}
+                      emptyText="No events on selected day."
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </RequireConnection>
   );
 }
 

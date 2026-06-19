@@ -2,11 +2,12 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [after-hackathon]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: SSH deploy
         uses: appleboy/ssh-action@v1.2.2
@@ -19,7 +20,9 @@ jobs:
           script: |
             set -e
             cd /opt/NoClickMail
-            git pull origin main
+            git fetch origin
+            git checkout after-hackathon
+            git pull origin after-hackathon
             pnpm install
             pnpm db:migrate
             pnpm build
