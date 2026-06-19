@@ -1,8 +1,9 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request } from "express";
 
 function clientIp(req: Request): string {
-  return req.ip ?? req.socket.remoteAddress ?? "unknown";
+  const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
+  return ipKeyGenerator(ip);
 }
 
 const jsonHandler = rateLimit({
