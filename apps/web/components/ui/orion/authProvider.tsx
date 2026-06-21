@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const isProtected = isAuthenticatedRoute(pathname);
 
     // Authenticated users on non-dashboard public pages → send to dashboard.
-    if (isAuthenticated && !isProtected && !isPublicRoute(pathname)) {
+    if (isAuthenticated) {
       router.replace("/dashboard/inbox");
       return;
     }
