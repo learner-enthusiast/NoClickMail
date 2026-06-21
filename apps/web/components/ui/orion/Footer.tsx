@@ -9,11 +9,21 @@ export function Footer() {
     { label: "Sent", href: "/dashboard/sent", icon: MessageCircle },
     { label: "Trash", href: "/dashboard/trash", icon: Trash },
   ];
+  const LEGAL_LINKS = [
+    { label: "Privacy", href: "/privacy" },
+    { label: "Terms", href: "/terms" },
+  ] as const;
+
   return (
     <footer className="border-t">
-      <div className="mx-auto flex max-w-[1080px] border border-x-border flex-col items-center justify-between gap-2 px-4 py-6 text-sm text-muted-foreground sm:flex-row">
-        <span>© {new Date().getFullYear()} Orion Experience Quiet Intelligence</span>
-        <nav className="flex flex-row gap-8">
+      <div className="mx-auto flex max-w-[1080px] flex-col items-center justify-between gap-4 border border-x-border px-4 py-6 text-sm text-muted-foreground sm:flex-row">
+        <span>© {new Date().getFullYear()} Orion · Quiet Intelligence</span>
+        <nav className="flex flex-wrap items-center justify-center gap-6">
+          {LEGAL_LINKS.map(({ label, href }) => (
+            <Link key={href} href={href} className="transition-colors hover:text-foreground">
+              {label}
+            </Link>
+          ))}
           {NAV_ITEMS.map(({ label, href, icon: Icon }) => (
             <Link
               key={href}

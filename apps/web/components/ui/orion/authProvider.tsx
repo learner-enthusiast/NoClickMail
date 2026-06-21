@@ -33,10 +33,18 @@ const AUTHENTICATED_ROUTES = [
   "/dashboard/trash",
   "/dashboard/help",
 ];
+
+/** Routes authenticated users may visit without being redirected to the dashboard. */
+const PUBLIC_ROUTES = ["/", "/privacy", "/terms", "/api-auth/login"];
+
 function isAuthenticatedRoute(pathname: string) {
   return AUTHENTICATED_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
+}
+
+function isPublicRoute(pathname: string) {
+  return PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -65,8 +73,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const isProtected = isAuthenticatedRoute(pathname);
 
-    // Authenticated users may only be on protected routes → bounce off public pages.
-    if (isAuthenticated && !isProtected) {
+    // Authenticated users on non-dashboard public pages → send to dashboard.
+    if (isAuthenticated && !isProtected && !isPublicRoute(pathname)) {
       router.replace("/dashboard/inbox");
       return;
     }
