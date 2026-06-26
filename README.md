@@ -10,9 +10,7 @@ Orion connects to your Google accounts, syncs mail and events in real time, and 
 
 ## Tech stack
 
-Next.js 16, React 19, TypeScript, Tailwind CSS v4, tRPC v11, TanStack React Query, Express 5, PostgreSQL, Drizzle ORM, Corsair (Gmail + Calendar), OpenAI Agents, Google OAuth, SSE, pnpm, Turborepo
-
----
+## Next.js 16, React 19, TypeScript, Tailwind CSS v4, tRPC v11, TanStack React Query, Express 5, PostgreSQL, Drizzle ORM, Corsair (Gmail + Calendar), OpenAI Agents, Google OAuth, SSE, pnpm,
 
 ## Monorepo structure
 
@@ -88,11 +86,11 @@ You should see `✓ gmail` and `✓ googlecalendar` in the output.
 pnpm dev
 ```
 
-| Service | URL |
-|---------|-----|
-| Web | http://localhost:3000 |
-| API | http://localhost:8000 |
-| tRPC | http://localhost:8000/trpc |
+| Service  | URL                        |
+| -------- | -------------------------- |
+| Web      | http://localhost:3000      |
+| API      | http://localhost:8000      |
+| tRPC     | http://localhost:8000/trpc |
 | API docs | http://localhost:8000/docs |
 
 ### 7. First-time app flow
@@ -110,9 +108,9 @@ Copy `.env.example` to `.env` at the **repo root**. All apps and packages load f
 
 ### Database
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | Postgres connection string. Local: `postgresql://postgres:postgres@localhost:5432/dev`. For Neon/Supabase use the pooled URL at runtime. |
+| Variable       | Required | Description                                                                                                                              |
+| -------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` | Yes      | Postgres connection string. Local: `postgresql://postgres:postgres@localhost:5432/dev`. For Neon/Supabase use the pooled URL at runtime. |
 
 **Migrations on hosted Postgres:** use a **direct** (non-pooler) URL when running `pnpm db:migrate`, e.g. `DATABASE_URL_DIRECT` — Neon pooler URLs can fail on DDL.
 
@@ -120,33 +118,33 @@ Copy `.env.example` to `.env` at the **repo root**. All apps and packages load f
 
 ### API server
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `PORT` | No | API port (default `8000`) |
-| `BASE_URL` | No | Public API base URL (default `http://localhost:8000`) |
-| `CLIENT_URL` | Yes | Web app URL — used for OAuth redirects after login/connect |
-| `CORS_ORIGIN` | Yes | Web origin allowed for credentialed tRPC requests (must match `CLIENT_URL` exactly) |
-| `NODE_ENV` | No | `development` \| `prod` \| `production` — controls secure cookies |
+| Variable      | Required | Description                                                                         |
+| ------------- | -------- | ----------------------------------------------------------------------------------- |
+| `PORT`        | No       | API port (default `8000`)                                                           |
+| `BASE_URL`    | No       | Public API base URL (default `http://localhost:8000`)                               |
+| `CLIENT_URL`  | Yes      | Web app URL — used for OAuth redirects after login/connect                          |
+| `CORS_ORIGIN` | Yes      | Web origin allowed for credentialed tRPC requests (must match `CLIENT_URL` exactly) |
+| `NODE_ENV`    | No       | `development` \| `prod` \| `production` — controls secure cookies                   |
 
 ---
 
 ### JWT auth
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ACCESS_TOKEN_SECRET` | Yes | Min 32 chars — `openssl rand -base64 32` |
-| `REFRESH_TOKEN_SECRET` | Yes | Min 32 chars — separate from access secret |
-| `ACCESS_TOKEN_EXPIRY` | No | Default `1d` |
-| `REFRESH_TOKEN_EXPIRY` | No | Default `30d` |
+| Variable               | Required | Description                                |
+| ---------------------- | -------- | ------------------------------------------ |
+| `ACCESS_TOKEN_SECRET`  | Yes      | Min 32 chars — `openssl rand -base64 32`   |
+| `REFRESH_TOKEN_SECRET` | Yes      | Min 32 chars — separate from access secret |
+| `ACCESS_TOKEN_EXPIRY`  | No       | Default `1d`                               |
+| `REFRESH_TOKEN_EXPIRY` | No       | Default `30d`                              |
 
 ---
 
 ### Frontend
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `NEXT_PUBLIC_API_URL` | Yes | Browser tRPC endpoint, e.g. `http://localhost:8000/trpc`. **Baked in at build time** — rebuild web after changing. |
-| `API_INTERNAL_URL` | No | Server-side Next.js → API URL (OAuth proxy route). Default `http://localhost:8000` |
+| Variable              | Required | Description                                                                                                        |
+| --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_API_URL` | Yes      | Browser tRPC endpoint, e.g. `http://localhost:8000/trpc`. **Baked in at build time** — rebuild web after changing. |
+| `API_INTERNAL_URL`    | No       | Server-side Next.js → API URL (OAuth proxy route). Default `http://localhost:8000`                                 |
 
 ---
 
@@ -154,11 +152,11 @@ Copy `.env.example` to `.env` at the **repo root**. All apps and packages load f
 
 Used for **logging into Orion** (not the same flow as connecting Gmail in the dashboard).
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GOOGLE_OAUTH_CLIENT_ID` | Yes | From [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials) |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | Yes | OAuth 2.0 client secret |
-| `GOOGLE_OAUTH_REDIRECT_URI` | Yes | Must match a **Authorized redirect URI** in Google Console exactly |
+| Variable                     | Required | Description                                                                                  |
+| ---------------------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `GOOGLE_OAUTH_CLIENT_ID`     | Yes      | From [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials) |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Yes      | OAuth 2.0 client secret                                                                      |
+| `GOOGLE_OAUTH_REDIRECT_URI`  | Yes      | Must match a **Authorized redirect URI** in Google Console exactly                           |
 
 **Local dev (API-direct callback — recommended):**
 
@@ -181,23 +179,23 @@ Cookies are set on the **API host**; the web app calls tRPC on the same API host
 
 ### OpenAI
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | Powers Orion Intelligence (summarize, draft, agent chat) |
+| Variable         | Required | Description                                              |
+| ---------------- | -------- | -------------------------------------------------------- |
+| `OPENAI_API_KEY` | Yes      | Powers Orion Intelligence (summarize, draft, agent chat) |
 
 ---
 
 ### Corsair — Gmail & Calendar
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `CORSAIR_KEK` | Yes | Encryption key for stored tokens, min 32 chars — `openssl rand -base64 32` |
-| `CORSAIR_CONNECT_REDIRECT_URI` | Yes | API OAuth callback for connect flow: `http://localhost:8000/connect/callback` |
-| `CORSAIR_GMAIL_REDIRECT_URI` | Yes | User-facing redirect after Gmail connect (can match web URL) |
-| `CORSAIR_CALENDAR_REDIRECT_URI` | Yes | User-facing redirect after Calendar connect |
-| `CORSAIR_WEBHOOK_BASE` | Yes | Public **HTTPS** base for webhooks (ngrok in dev, API domain in prod) |
-| `CORSAIR_WEBHOOK_SECRET` | Yes | Min 16 chars — appended as `?token=` on webhook URLs |
-| `GMAIL_PUBSUB_TOPIC_ID` | Yes* | GCP Pub/Sub topic for Gmail push, e.g. `projects/my-project/topics/gmail-push` |
+| Variable                        | Required | Description                                                                    |
+| ------------------------------- | -------- | ------------------------------------------------------------------------------ |
+| `CORSAIR_KEK`                   | Yes      | Encryption key for stored tokens, min 32 chars — `openssl rand -base64 32`     |
+| `CORSAIR_CONNECT_REDIRECT_URI`  | Yes      | API OAuth callback for connect flow: `http://localhost:8000/connect/callback`  |
+| `CORSAIR_GMAIL_REDIRECT_URI`    | Yes      | User-facing redirect after Gmail connect (can match web URL)                   |
+| `CORSAIR_CALENDAR_REDIRECT_URI` | Yes      | User-facing redirect after Calendar connect                                    |
+| `CORSAIR_WEBHOOK_BASE`          | Yes      | Public **HTTPS** base for webhooks (ngrok in dev, API domain in prod)          |
+| `CORSAIR_WEBHOOK_SECRET`        | Yes      | Min 16 chars — appended as `?token=` on webhook URLs                           |
+| `GMAIL_PUBSUB_TOPIC_ID`         | Yes\*    | GCP Pub/Sub topic for Gmail push, e.g. `projects/my-project/topics/gmail-push` |
 
 \*Required for Gmail realtime sync via webhooks.
 
@@ -205,11 +203,11 @@ Cookies are set on the **API host**; the web app calls tRPC on the same API host
 
 ### Optional
 
-| Variable | Description |
-|----------|-------------|
-| `LOGGER_LEVEL` | `debug` \| `info` \| `warn` \| `error` |
-| `PUBLIC_OPENAPI_DOCS` | `true` to expose `/docs` |
-| `OPENAPI_DOCS_SECRET` | Protect `/docs` in production |
+| Variable              | Description                                      |
+| --------------------- | ------------------------------------------------ |
+| `LOGGER_LEVEL`        | `debug` \| `info` \| `warn` \| `error`           |
+| `PUBLIC_OPENAPI_DOCS` | `true` to expose `/docs`                         |
+| `OPENAPI_DOCS_SECRET` | Protect `/docs` in production                    |
 | `SKIP_ENV_VALIDATION` | Set `true` for Docker/CI builds without full env |
 
 ---
@@ -223,12 +221,14 @@ Cookies are set on the **API host**; the web app calls tRPC on the same API host
 3. Add **Authorized redirect URIs**:
 
    **Local:**
+
    ```
    http://localhost:8000/auth/google/callback
    http://localhost:8000/connect/callback
    ```
 
    **Production:**
+
    ```
    https://orionserver.arnabsamanta.in/auth/google/callback
    https://orionserver.arnabsamanta.in/connect/callback
@@ -255,6 +255,7 @@ In **APIs & Services → Library**, enable:
    ```
 
    The URL must **exactly** match:
+
    ```
    ${CORSAIR_WEBHOOK_BASE}/webhooks/corsair?token=${CORSAIR_WEBHOOK_SECRET}
    ```
@@ -308,10 +309,10 @@ Means `corsair:setup` was not run on this database. Run it and restart the API.
 
 Example split-host setup:
 
-| Role | Host |
-|------|------|
-| Web | `https://orion.arnabsamanta.in` |
-| API | `https://orionserver.arnabsamanta.in` |
+| Role | Host                                  |
+| ---- | ------------------------------------- |
+| Web  | `https://orion.arnabsamanta.in`       |
+| API  | `https://orionserver.arnabsamanta.in` |
 
 ### Checklist
 
@@ -330,15 +331,15 @@ Deploy workflow (`.github/workflows/deploy.yml`): `git pull` → `pnpm install` 
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start web + API in dev mode |
-| `pnpm build` | Build all apps |
-| `pnpm db:migrate` | Apply Drizzle migrations |
-| `pnpm db:generate` | Generate migration from schema changes |
-| `pnpm --filter @repo/api corsair:setup` | Initialize Corsair integrations |
-| `pnpm lint` | Lint all packages |
-| `pnpm check-types` | Typecheck all packages |
+| Command                                 | Description                            |
+| --------------------------------------- | -------------------------------------- |
+| `pnpm dev`                              | Start web + API in dev mode            |
+| `pnpm build`                            | Build all apps                         |
+| `pnpm db:migrate`                       | Apply Drizzle migrations               |
+| `pnpm db:generate`                      | Generate migration from schema changes |
+| `pnpm --filter @repo/api corsair:setup` | Initialize Corsair integrations        |
+| `pnpm lint`                             | Lint all packages                      |
+| `pnpm check-types`                      | Typecheck all packages                 |
 
 ---
 
@@ -353,13 +354,13 @@ Deploy workflow (`.github/workflows/deploy.yml`): `git pull` → `pnpm install` 
 
 ## Troubleshooting
 
-| Issue | Fix |
-|-------|-----|
+| Issue                            | Fix                                                                                                                                          |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `auth.me` 401 after Google login | Align `GOOGLE_OAUTH_REDIRECT_URI` (API host), `CORS_ORIGIN`, `CLIENT_URL`, `NEXT_PUBLIC_API_URL`; see [Google OAuth](#google-oauth--sign-in) |
-| `Integration "gmail" not found` | Run `pnpm --filter @repo/api corsair:setup` |
-| Webhook 401 | `CORSAIR_WEBHOOK_BASE` + `?token=` must match Pub/Sub subscription URL exactly; check nginx passes `Authorization` |
-| SSL DB errors (Neon) | Use SSL connection string; see `packages/database/pg.ts` |
-| `NEXT_PUBLIC_*` not updating | Rebuild web app after env change |
+| `Integration "gmail" not found`  | Run `pnpm --filter @repo/api corsair:setup`                                                                                                  |
+| Webhook 401                      | `CORSAIR_WEBHOOK_BASE` + `?token=` must match Pub/Sub subscription URL exactly; check nginx passes `Authorization`                           |
+| SSL DB errors (Neon)             | Use SSL connection string; see `packages/database/pg.ts`                                                                                     |
+| `NEXT_PUBLIC_*` not updating     | Rebuild web app after env change                                                                                                             |
 
 ---
 
