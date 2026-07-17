@@ -38,6 +38,7 @@ export default class TenantCorsairAgent {
       name: "tenant-corsair-agent",
       instructions: TenantCorsairAgent.CORSAIR_AGENT_INSTRUCTIONS,
       tools: corsairTools,
+      model: "gpt-4o-mini",
     });
   }
 

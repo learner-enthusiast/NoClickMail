@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 const HeroSection = () => {
   const router = useRouter();
   return (
-    <div className="flex flex-col items-center justify-center gap-5">
+    <div className="flex flex-col items-center justify-center gap-5" id="how-it-works">
       <h1 className="type-hero-header">
         Your AI Executive Assistant for <br />{" "}
         <p className="text-secondary-accent">Email and Calender</p>
@@ -34,22 +34,17 @@ const HeroSection = () => {
           View Founder Video
         </Button>
       </div>
-      <Image
-        src="/hero1-light.png"
-        alt="Hero Section"
-        width={1080}
-        height={1080}
-        className="dark:hidden"
-        priority
-      />
-      <Image
-        src="/hero1.png"
-        alt="Hero Section"
-        width={1080}
-        height={1080}
-        className="hidden dark:block"
-        priority
-      />
+      <div>
+        <video
+          className="w-full h-40 "
+          src="/mascot.webm"
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-hidden
+        />
+      </div>
     </div>
   );
 };

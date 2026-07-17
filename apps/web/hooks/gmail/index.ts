@@ -29,3 +29,11 @@ export const listGmailTrash = (input?: RouterInputs["gmail"]["listTrash"]) =>
 export const restoreGmailMessage = () => pickMutationState(trpc.gmail.restoreMessage.useMutation());
 export const gmailDraft = (input: RouterInputs["gmail"]["getDraftMessage"]) =>
   pickQueryState(trpc.gmail.getDraftMessage.useQuery(input));
+export const gmailListLabels = () => pickQueryState(trpc.gmail.listLabels.useQuery(undefined));
+
+export const gmailListByLabel = (input: RouterInputs["gmail"]["listByLabel"], enabled = true) =>
+  pickQueryState(
+    trpc.gmail.listByLabel.useQuery(input, {
+      enabled: enabled && !!input.labelId,
+    }),
+  );

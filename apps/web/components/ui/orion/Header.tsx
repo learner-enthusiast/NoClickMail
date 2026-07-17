@@ -12,16 +12,27 @@ import { cn } from "~/lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@radix-ui/react-hover-card";
 import { connectionStatus } from "~/hooks/connections";
 import { env } from "~/env";
+import { OrionLogo } from "./OrionLogo";
+import { useLenis } from "~/providers/smooth-scroll";
 
-const NAV_ITEMS = [
-  // { label: "Dashboard", href: "/inbox" },
-  // { label: "Activity", href: "/activity" },
-  // { label: "Analytics", href: "/analytics" },
-] as const;
+const NAV_ITEMS = [{ label: "Dashboard", href: "dashboard/inbox" }] as const;
 const API_BASE = (env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/trpc").replace(
   /\/trpc\/?$/,
   "",
 );
+
+const DASHBOARD_ITEMS = [
+  {
+    label: "How it works",
+    href: "#how-it-works",
+  },
+  { label: "Workflows", href: "#workflows" },
+  { label: "Integrations", href: "#integrations" },
+  { label: "Agent", href: "#agent" },
+  { label: "FAQ", href: "#faq" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "Contact", href: "#contact" },
+] as const;
 
 const CONNECTION_ITEMS = [
   { id: "gmail", label: "Gmail", icon: Mail },
@@ -99,11 +110,31 @@ function ConnectionsDropdown() {
 }
 function NavLink({ href, label }: { href: string; label: string }) {
   const pathname = usePathname();
-  const isActive = pathname === href || pathname.startsWith(`${href}/`);
+  const lenis = useLenis();
+  const isHash = href.startsWith("#");
+  const isActive = !isHash && (pathname === href || pathname.startsWith(`${href}/`));
+
+  function onClick(e: React.MouseEvent<HTMLAnchorElement>) {
+    if (!isHash) return;
+    e.preventDefault();
+    const id = href.slice(1);
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    // sticky header ~64px
+    if (lenis) {
+      lenis.scrollTo(el, { offset: -80, duration: 1.2 });
+    } else {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    history.pushState(null, "", href);
+  }
 
   return (
     <Link
       href={href}
+      onClick={onClick}
       className={cn(
         "relative pb-1 text-sm font-medium transition-colors",
         isActive
@@ -123,18 +154,27 @@ export function Header() {
     <header className="sticky top-0 z-50 border-b border-border bg-background">
       <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         {/* Left — logo + brand */}
-        <Link href="/inbox" className="flex items-center gap-2.5">
-          <Image src="/orion.png" alt="Orion" width={32} height={32} className="size-8" />
+        <Link href="/" className="flex items-center gap-2.5">
+          <OrionLogo width={64} height={64} className="text-primary" />
           <span className="text-lg font-semibold tracking-tight text-foreground">Orion</span>
         </Link>
 
         {/* Center — nav (authenticated only) */}
-        {/* {isAuthenticated && (
+
+        {DASHBOARD_ITEMS.length > 0 && (
+          <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-10 md:flex">
+            {DASHBOARD_ITEMS.map((item) => (
+              <NavLink key={item?.href} {...item} />
+            ))}
+          </nav>
+        )}
+
+        {isAuthenticated && (
           <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-10 md:flex">
             {NAV_ITEMS.length > 0 &&
               NAV_ITEMS.map((item) => <NavLink key={item?.href} {...item} />)}
           </nav>
-        )} */}
+        )}
 
         {/* Right — actions */}
         <div className="flex items-center gap-1">
