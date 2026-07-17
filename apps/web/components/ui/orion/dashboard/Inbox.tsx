@@ -15,6 +15,7 @@ import { cn } from "~/lib/utils";
 import { useGmailInboxPagination, useGmailMessagesPagination } from "~/hooks/gmail/pagination";
 import { MailMessageList } from "./MailMessageList";
 import { toast } from "sonner";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../../resizable";
 
 function parseFrom(from: string | null) {
   if (!from) return { name: "Unknown", email: "" };
@@ -103,30 +104,50 @@ export function Inbox() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full">
-      {/* List — full width when nothing selected, narrow when reading */}
-      <MailMessageList
-        title="Inbox"
-        messages={messages}
-        selectedId={selectedId}
-        onSelectMessage={handleSelectMessage}
-        peerField="from"
-        showUnreadStyles
-        hasMore={hasMore}
-        isLoadingMore={isLoadingMore}
-        onLoadMore={loadMore}
-      />
-
-      {/* Reader — only when an email is opened */}
-      {selectedId && (
-        <MailReader
-          id={selectedId}
-          onBack={() => {
-            setSelectedId(null);
-          }}
-          onDelete={handleDeleteMessage}
-          isDeleting={deleteStatus === "pending"}
+    <div className="h-[calc(100vh-4rem)] w-full">
+      {!selectedId ? (
+        <MailMessageList
+          title="Inbox"
+          messages={messages}
+          selectedId={selectedId}
+          onSelectMessage={handleSelectMessage}
+          peerField="from"
+          showUnreadStyles
+          hasMore={hasMore}
+          isLoadingMore={isLoadingMore}
+          onLoadMore={loadMore}
         />
+      ) : (
+        <ResizablePanelGroup
+          direction="horizontal"
+          autoSaveId="mail-layout"
+          className="h-full w-full"
+        >
+          <ResizablePanel defaultSize={35} minSize={20} maxSize={50} className="overflow-hidden">
+            <MailMessageList
+              title="Inbox"
+              messages={messages}
+              selectedId={selectedId}
+              onSelectMessage={handleSelectMessage}
+              peerField="from"
+              showUnreadStyles
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={loadMore}
+            />
+          </ResizablePanel>
+
+          <ResizableHandle withHandle />
+
+          <ResizablePanel defaultSize={65} minSize={40} className="overflow-hidden">
+            <MailReader
+              id={selectedId}
+              onBack={() => setSelectedId(null)}
+              onDelete={handleDeleteMessage}
+              isDeleting={deleteStatus === "pending"}
+            />
+          </ResizablePanel>
+        </ResizablePanelGroup>
       )}
     </div>
   );

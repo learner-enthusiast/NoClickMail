@@ -54,7 +54,7 @@ export function SideBar() {
   const { logout, isLoggingOut } = useAuth();
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-border bg-sidebar">
+    <aside className="flex h-full w-full flex-col border-r border-border bg-sidebar">
       {/* Brand */}
       <div className="flex items-center gap-3 px-5 py-5">
         <Image src="/orion.png" alt="Orion" width={36} height={36} className="size-9" />

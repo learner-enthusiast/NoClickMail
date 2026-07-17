@@ -43,10 +43,6 @@ function isAuthenticatedRoute(pathname: string) {
   );
 }
 
-function isPublicRoute(pathname: string) {
-  return PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
-}
-
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -72,12 +68,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
 
     const isProtected = isAuthenticatedRoute(pathname);
-
-    // Authenticated users on non-dashboard public pages → send to dashboard.
-    if (isAuthenticated) {
-      router.replace("/dashboard/inbox");
-      return;
-    }
 
     // Unauthenticated users may only be on public routes → bounce off protected pages.
     if (!isAuthenticated && isProtected) {
