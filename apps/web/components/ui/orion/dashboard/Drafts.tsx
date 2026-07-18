@@ -7,6 +7,7 @@ import { MailMessageList } from "./MailMessageList";
 import { MailReader } from "./Inbox";
 import { deleteGmailMessage } from "~/hooks/gmail";
 import { toast } from "sonner";
+import { PairedRevolution } from "../PairedRevolution";
 
 export function Drafts() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export function Drafts() {
   if (isPending) {
     return (
       <div className="flex h-[calc(100vh-4rem)] w-full items-center justify-center text-sm text-muted-foreground">
-        <Loader2 className="size-5 animate-spin" />
+        <PairedRevolution />
       </div>
     );
   }

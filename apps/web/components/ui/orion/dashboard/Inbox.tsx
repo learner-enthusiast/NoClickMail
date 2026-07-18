@@ -16,6 +16,7 @@ import { useGmailInboxPagination, useGmailMessagesPagination } from "~/hooks/gma
 import { MailMessageList } from "./MailMessageList";
 import { toast } from "sonner";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../../resizable";
+import { PairedRevolution } from "../PairedRevolution";
 
 function parseFrom(from: string | null) {
   if (!from) return { name: "Unknown", email: "" };
@@ -90,8 +91,8 @@ export function Inbox() {
   }
   if (isPending) {
     return (
-      <div className="p-6 text-sm text-muted-foreground h-full flex justify-center items-center w-full">
-        <Loader2 className="size-5 animate-spin" />
+      <div className="p-6 text-sm text-muted-foreground min-h-full flex justify-center items-center w-full">
+        <PairedRevolution />
       </div>
     );
   }
@@ -104,7 +105,7 @@ export function Inbox() {
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] w-full">
+    <div className="w-full">
       {!selectedId ? (
         <MailMessageList
           title="Inbox"
@@ -193,11 +194,7 @@ export function MailReader({
               disabled={isDeleting}
               onClick={() => void onDelete(id)}
             >
-              {isDeleting ? (
-                <Loader2 className="size-5 animate-spin" />
-              ) : (
-                <Trash2 className="size-5" />
-              )}
+              {isDeleting ? <PairedRevolution /> : <Trash2 className="size-5" />}
             </Button>
           )}
         </div>

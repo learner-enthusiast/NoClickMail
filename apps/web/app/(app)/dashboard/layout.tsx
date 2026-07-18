@@ -14,7 +14,7 @@ export default function RootLayout({
     <>
       <RealtimeSync />
 
-      <ResizablePanelGroup direction="horizontal" className="min-h-screen w-full">
+      <ResizablePanelGroup direction="horizontal" className="min-h-full w-full">
         <ResizablePanel defaultSize={15} minSize={12} maxSize={25}>
           <SideBar />
         </ResizablePanel>
@@ -22,7 +22,7 @@ export default function RootLayout({
         <ResizableHandle withHandle />
 
         <ResizablePanel defaultSize={55} minSize={35}>
-          {children}
+          <div className="h-full max-h-full overflow-y-auto">{children}</div>
         </ResizablePanel>
 
         <ResizableHandle withHandle />

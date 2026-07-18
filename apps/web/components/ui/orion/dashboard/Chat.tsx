@@ -183,7 +183,7 @@ export function Chat() {
     });
   }
   return (
-    <aside className="flex h-[calc(100vh-4rem)] w-full flex-col border-l border-border bg-sidebar">
+    <aside className="flex h-full w-full flex-col border-l border-border bg-sidebar">
       <CalendarInviteDialog
         open={inviteOpen}
         onOpenChange={setInviteOpen}

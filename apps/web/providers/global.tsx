@@ -36,9 +36,9 @@ export const GlobalProviders: React.FC<{ children: React.ReactNode }> = ({ child
         <trpc.Provider queryClient={queryClient} client={trpcClient}>
           <AuthProvider>
             <TooltipProvider>
-              <div className="flex min-h-screen flex-col">
+              <div className="flex h-svh max-h-svh flex-col overflow-hidden">
                 <Header />
-                <main className="flex-1">{children}</main>
+                <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
                 <Footer />
               </div>{" "}
             </TooltipProvider>

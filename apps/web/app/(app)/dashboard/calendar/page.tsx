@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import { calendarEvents } from "~/hooks/calendar";
 import { RequireConnection } from "~/components/ui/orion/glitches/RequireConnection";
+import { PairedRevolution } from "~/components/ui/orion/PairedRevolution";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -219,7 +220,7 @@ function EventState({
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground h-full w-full justify-center">
         <CalendarIcon className="size-4" />
-        <Loader2 className="size-4 animate-spin" />
+        <PairedRevolution />
       </div>
     );
   }

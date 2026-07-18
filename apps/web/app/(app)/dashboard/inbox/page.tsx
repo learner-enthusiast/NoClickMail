@@ -18,7 +18,7 @@ import { connectionStatus } from "~/hooks/connections";
 
 function Connections() {
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full">
+    <div className="flex min-h-full w-full">
       <RequireConnection require="gmail">
         <Inbox />
       </RequireConnection>
