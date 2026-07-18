@@ -1,9 +1,10 @@
 "use client";
 
-import Image from "next/image";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Calendar, Check, Mail, RefreshCw } from "lucide-react";
+import gsap from "gsap";
+import { Calendar, Check, Mail, RefreshCw } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { useAuth } from "~/components/ui/orion/authProvider";
@@ -134,9 +135,57 @@ function NavLink({ href, label }: { href: string; label: string }) {
   );
 }
 
+function LandingNav() {
+  const navRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    const items = navRef.current?.querySelectorAll("[data-nav-item]");
+    if (!items?.length) return;
+    gsap.set(items, { opacity: 0, x: -18 });
+  }, []);
+
+  useEffect(() => {
+    const items = navRef.current?.querySelectorAll("[data-nav-item]");
+    if (!items?.length) return;
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      gsap.set(items, { opacity: 1, x: 0 });
+      return;
+    }
+
+    const tween = gsap.to(items, {
+      opacity: 1,
+      x: 0,
+      duration: 0.55,
+      ease: "power3.out",
+      stagger: 0.07,
+      delay: 0.12,
+    });
+
+    return () => {
+      tween.kill();
+    };
+  }, []);
+
+  return (
+    <nav
+      ref={navRef}
+      className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-10 md:flex"
+    >
+      {DASHBOARD_ITEMS.map((item) => (
+        <span key={item.href} data-nav-item className="inline-block will-change-transform">
+          <NavLink {...item} />
+        </span>
+      ))}
+    </nav>
+  );
+}
+
 export function Header() {
   const { isAuthenticated, user, isLoading } = useAuth();
-
+  const pathname = usePathname();
+  const isRoot = pathname === "/";
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background">
       <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
@@ -148,13 +197,7 @@ export function Header() {
 
         {/* Center — nav (authenticated only) */}
 
-        {DASHBOARD_ITEMS.length > 0 && (
-          <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-10 md:flex">
-            {DASHBOARD_ITEMS.map((item) => (
-              <NavLink key={item?.href} {...item} />
-            ))}
-          </nav>
-        )}
+        {isRoot && DASHBOARD_ITEMS.length > 0 && <LandingNav />}
         {/* 
         {isAuthenticated && (
           <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-10 md:flex">

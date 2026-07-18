@@ -200,7 +200,6 @@ class GmailService {
       for (const headerName of ["To", "Cc", "Bcc"] as const) {
         const value = this.header(msg, headerName);
         if (!value) continue;
-        console.log(value);
         for (const { email, name } of this.parseAddresses(value)) {
           const key = email.toLowerCase();
           const existing = byEmail.get(key);
