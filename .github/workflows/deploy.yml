@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [after-hackathon]
+    branches: [main]
 
 jobs:
   deploy:
@@ -21,8 +21,8 @@ jobs:
             set -e
             cd /opt/NoClickMail
             git fetch origin
-            git checkout after-hackathon
-            git pull origin after-hackathon
+            git checkout main
+            git pull origin main
             pnpm install
             pnpm db:migrate
             pnpm build
