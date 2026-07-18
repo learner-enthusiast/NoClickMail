@@ -1,15 +1,14 @@
-import React from "react";
+"use client";
+
 import { Sent } from "~/components/ui/orion/dashboard/Sent";
 import { RequireConnection } from "~/components/ui/orion/glitches/RequireConnection";
 
-function Page() {
+export default function SentPage() {
   return (
-    <div>
+    <div className="h-full min-h-0 w-full">
       <RequireConnection require="gmail">
         <Sent />
       </RequireConnection>
     </div>
   );
 }
-
-export default Page;

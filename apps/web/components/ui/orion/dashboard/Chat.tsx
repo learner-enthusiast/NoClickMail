@@ -183,7 +183,7 @@ export function Chat() {
     });
   }
   return (
-    <aside className="flex h-full w-full flex-col border-l border-border bg-sidebar">
+    <aside className="flex h-full min-h-0 w-full flex-col border-l border-border bg-sidebar">
       <CalendarInviteDialog
         open={inviteOpen}
         onOpenChange={setInviteOpen}
@@ -213,7 +213,7 @@ export function Chat() {
       </div>
 
       {/* Transcript */}
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {threadId ? (
           <Transcript
             threadId={threadId}

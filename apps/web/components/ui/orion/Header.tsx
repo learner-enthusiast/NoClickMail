@@ -168,13 +168,13 @@ export function Header() {
             ))}
           </nav>
         )}
-
+        {/* 
         {isAuthenticated && (
           <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-10 md:flex">
             {NAV_ITEMS.length > 0 &&
               NAV_ITEMS.map((item) => <NavLink key={item?.href} {...item} />)}
           </nav>
-        )}
+        )} */}
 
         {/* Right — actions */}
         <div className="flex items-center gap-1">

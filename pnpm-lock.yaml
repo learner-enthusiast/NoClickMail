@@ -205,6 +205,9 @@ importers:
       '@repo/trpc':
         specifier: workspace:*
         version: link:../../packages/trpc
+      '@shadcn/react':
+        specifier: ^0.2.1
+        version: 0.2.1(@types/react@19.2.2)(react@19.2.7)
       '@t3-oss/env-nextjs':
         specifier: ^0.13.10
         version: 0.13.11(typescript@5.9.2)(zod@4.4.3)
@@ -2713,6 +2716,17 @@ packages:
   '@scalar/types@0.6.10':
     resolution: {integrity: sha512-fZkelRwcEeAhsn4c0wjYXWrzSzLaEyfxTn/eazXJ4XfCIsgJTQyK0FD8mnOBZJ2vEIbtT2E1mBKnCbDxrJIlxA==}
     engines: {node: '>=20'}
+
+  '@shadcn/react@0.2.1':
+    resolution: {integrity: sha512-5krgi3dRMKb5jH6a+qPzVJUy/54s0kKE4Rw4LjDfLqOdVQTWKUgxWf1kW8r912I0jX/Lzxqc+pgjkjWxUIK5BQ==}
+    peerDependencies:
+      '@types/react': '>=19'
+      react: '>=19'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      react:
+        optional: true
 
   '@sinclair/typebox@0.27.10':
     resolution: {integrity: sha512-MTBk/3jGLNB2tVxv6uLlFh1iu64iYOQ2PbdOSK3NW8JZsmlaOh2q6sdtKowBhfw8QFLmYNzTW4/oK4uATIi6ZA==}
@@ -8333,6 +8347,11 @@ snapshots:
       nanoid: 5.1.11
       type-fest: 5.7.0
       zod: 4.4.3
+
+  '@shadcn/react@0.2.1(@types/react@19.2.2)(react@19.2.7)':
+    optionalDependencies:
+      '@types/react': 19.2.2
+      react: 19.2.7
 
   '@sinclair/typebox@0.27.10': {}
 

@@ -1,7 +1,9 @@
 import { Calendar, DraftingCompass, Inbox, LucideIcon, MessageCircle, Trash } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "./authProvider";
 
 export function Footer() {
+  const { isAuthenticated, user, isLoading } = useAuth();
   const NAV_ITEMS: { label: string; href: string; icon: LucideIcon }[] = [
     { label: "Inbox", href: "/dashboard/inbox", icon: Inbox },
     { label: "Calendar", href: "/dashboard/calendar", icon: Calendar },
@@ -15,27 +17,31 @@ export function Footer() {
   ] as const;
 
   return (
-    <footer className="border-t">
-      <div className="mx-auto flex max-w-[1080px] flex-col items-center justify-between gap-4 border border-x-border px-4 py-6 text-sm text-muted-foreground sm:flex-row">
-        <span>© {new Date().getFullYear()} Orion · Quiet Intelligence</span>
-        <nav className="flex flex-wrap items-center justify-center gap-6">
+    <footer className="shrink-0 border-t border-border">
+      <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-3 px-6 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center">
+        <span className="shrink-0">© {new Date().getFullYear()} Orion · Quiet Intelligence</span>
+
+        <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 sm:justify-end">
           {LEGAL_LINKS.map(({ label, href }) => (
-            <Link key={href} href={href} className="transition-colors hover:text-foreground">
-              {label}
-            </Link>
-          ))}
-          {NAV_ITEMS.map(({ label, href, icon: Icon }) => (
             <Link
               key={href}
               href={href}
-              className="group flex items-center gap-2.5 rounded-md py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="leading-none transition-colors hover:text-foreground"
             >
-              <span className="flex size-7 items-center justify-center rounded-md bg-muted transition-colors group-hover:bg-secondary">
-                <Icon className="size-3.5" />
-              </span>
               {label}
             </Link>
           ))}
+
+          {isAuthenticated &&
+            NAV_ITEMS.map(({ label, href }) => (
+              <Link
+                key={href}
+                href={href}
+                className="leading-none transition-colors hover:text-foreground"
+              >
+                {label}
+              </Link>
+            ))}
         </nav>
       </div>
     </footer>

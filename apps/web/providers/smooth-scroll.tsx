@@ -1,4 +1,3 @@
-// providers/smooth-scroll.tsx
 "use client";
 
 import Lenis from "lenis";
@@ -15,11 +14,16 @@ export function SmoothScrollProvider({ children }: { children: ReactNode }) {
   const [lenis, setLenis] = useState<Lenis | null>(null);
 
   useEffect(() => {
+    // Scroll lives on <main data-scroll-root>, not the window — Lenis must target that node
+    // or wheel events get eaten and overflow-y-auto never moves.
+    const wrapper = document.querySelector<HTMLElement>("[data-scroll-root]");
+
     const instance = new Lenis({
+      ...(wrapper ? { wrapper, content: wrapper } : {}),
       autoRaf: false,
       lerp: 0.08,
       smoothWheel: true,
-      anchors: false, // handle hash nav yourself
+      anchors: false,
     });
 
     setLenis(instance);

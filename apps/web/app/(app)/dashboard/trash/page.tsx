@@ -5,7 +5,7 @@ import { RequireConnection } from "~/components/ui/orion/glitches/RequireConnect
 
 export default function TrashPage() {
   return (
-    <div className="">
+    <div className="h-full min-h-0 w-full">
       <RequireConnection require="gmail">
         <Trash />
       </RequireConnection>

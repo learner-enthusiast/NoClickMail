@@ -1,12 +1,22 @@
 "use client";
 
-import { deleteGmailMessage, markGmailMessageRead } from "~/hooks/gmail";
-import { useGmailMessagesPagination } from "~/hooks/gmail/pagination";
+import { useMemo } from "react";
+import { deleteGmailMessage, gmailListLabels, markGmailMessageRead } from "~/hooks/gmail";
+import { useGmailLabelPagination } from "~/hooks/gmail/pagination";
 import { toast } from "sonner";
-
 import { MailFolderView } from "./MailFolderView";
 
-export function Inbox() {
+type LabelMailProps = {
+  labelId: string;
+};
+
+export function LabelMail({ labelId }: LabelMailProps) {
+  const { data: labelsData } = gmailListLabels();
+  const title = useMemo(() => {
+    const match = labelsData?.labels?.find((l) => l.id === labelId);
+    return match?.name ?? labelId;
+  }, [labelsData?.labels, labelId]);
+
   const {
     messages,
     hasMore,
@@ -17,7 +27,7 @@ export function Inbox() {
     isPending,
     isLoadingMore,
     isError,
-  } = useGmailMessagesPagination("inbox");
+  } = useGmailLabelPagination(labelId);
 
   const { mutateAsync: markRead } = markGmailMessageRead();
   const { mutateAsync: deleteMessage, status: deleteStatus } = deleteGmailMessage();
@@ -28,7 +38,7 @@ export function Inbox() {
     try {
       await markRead({ id: msg.id, read: true });
     } catch {
-      // next refetch corrects
+      // leave local state; next refetch corrects
     }
   }
 
@@ -49,12 +59,12 @@ export function Inbox() {
 
   return (
     <MailFolderView
-      title="Inbox"
+      title={title}
       messages={messages}
       isPending={isPending}
       isError={isError}
-      errorLabel="Couldn’t load your inbox."
-      emptyLabel="No messages in your inbox."
+      errorLabel="Couldn’t load this label."
+      emptyLabel="No messages with this label."
       peerField="from"
       showUnreadStyles
       hasMore={hasMore}

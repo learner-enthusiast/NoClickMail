@@ -134,7 +134,7 @@ export function SideBar() {
                 key={l.id}
                 id={l.id}
                 label={l.name}
-                href={`/dashboard/label/${l.name}`}
+                href={`/dashboard/label/${encodeURIComponent(l.id)}`}
                 icon={Tag}
                 isLoading={false}
                 unreadCount={l.messagesUnread ?? 0}
