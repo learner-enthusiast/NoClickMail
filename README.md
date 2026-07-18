@@ -108,7 +108,7 @@ Copy `.env.example` to `.env` at the **repo root**. All apps and packages load f
 
 ### Database
 
-| Variable       | Required | Description                                                                                                                              |
+| Variable       | Requires | Description                                                                                                                              |
 | -------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL` | Yes      | Postgres connection string. Local: `postgresql://postgres:postgres@localhost:5432/dev`. For Neon/Supabase use the pooled URL at runtime. |
 
