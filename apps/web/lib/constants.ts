@@ -2,6 +2,7 @@ export const pickMutationState = <
   T extends {
     mutateAsync: T["mutateAsync"];
     mutate: T["mutate"];
+    reset: T["reset"];
     error: T["error"];
     failureCount: T["failureCount"];
     isError: T["isError"];
@@ -12,11 +13,13 @@ export const pickMutationState = <
 >(
   mutation: T,
 ) => {
-  const { mutateAsync, mutate, error, failureCount, isError, isIdle, isSuccess, status } = mutation;
+  const { mutateAsync, mutate, reset, error, failureCount, isError, isIdle, isSuccess, status } =
+    mutation;
 
   return {
     mutateAsync,
     mutate,
+    reset,
     error,
     failureCount,
     isError,

@@ -4,11 +4,13 @@ import { Button } from "../../button";
 import Image from "next/image";
 import { InViewAnnotation } from "../glitches/glitches";
 import { useRouter } from "next/navigation";
+import { useAuth } from "../authProvider";
 
 const HeroSection = () => {
+  const { isAuthenticated, user, isLoading } = useAuth();
   const router = useRouter();
   return (
-    <div className="flex flex-col items-center justify-center gap-5" id="how-it-works">
+    <div className="scroll-mt-20 flex flex-col items-center justify-center gap-5" id="how-it-works">
       <h1 className="type-hero-header">
         Your AI Executive Assistant for <br />{" "}
         <p className="text-secondary-accent">Email and Calender</p>
@@ -19,8 +21,13 @@ const HeroSection = () => {
       </p>
 
       <div className="flex flex-row gap-2">
-        <Button size="lg" onClick={() => router.push("/api-auth/login")}>
-          Get Started
+        <Button
+          size="lg"
+          onClick={() =>
+            isAuthenticated ? router.push("/dashboard/inbox") : router.push("/api-auth/login")
+          }
+        >
+          {isAuthenticated ? "Go to Dashboard" : "Get Started"}
         </Button>
         <Button
           size="lg"
@@ -34,9 +41,9 @@ const HeroSection = () => {
           View Founder Video
         </Button>
       </div>
-      <div>
+      <div className="pointer-events-none">
         <video
-          className="w-full h-40 "
+          className="h-40 w-full"
           src="/mascot.webm"
           autoPlay
           loop

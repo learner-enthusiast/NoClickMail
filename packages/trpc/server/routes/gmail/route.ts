@@ -6,6 +6,7 @@ import {
   getMessageInputModel,
   gmailDraftDetailModel,
   gmailMessageDetailModel,
+  listByCategoryInputModel,
   listByLabelInputModel,
   listDraftsInputModel,
   listInboxInputModel,
@@ -102,4 +103,9 @@ export const gmailRouter = router({
     .input(listByLabelInputModel)
     .output(listMessagesOutputModel)
     .query(({ ctx, input }) => gmailService.listByLabel(ctx.user, input)),
+  listByCategory: authenticatedProcedure
+    .meta({ openapi: { method: "GET", path: getPath("/category"), tags: TAGS } })
+    .input(listByCategoryInputModel)
+    .output(listMessagesOutputModel)
+    .query(({ ctx, input }) => gmailService.listByCategory(ctx.user, input)),
 });

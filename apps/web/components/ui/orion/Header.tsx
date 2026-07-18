@@ -13,7 +13,6 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@radix-ui/react-h
 import { connectionStatus } from "~/hooks/connections";
 import { env } from "~/env";
 import { OrionLogo } from "./OrionLogo";
-import { useLenis } from "~/providers/smooth-scroll";
 
 const NAV_ITEMS = [{ label: "Dashboard", href: "dashboard/inbox" }] as const;
 const API_BASE = (env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/trpc").replace(
@@ -110,38 +109,26 @@ function ConnectionsDropdown() {
 }
 function NavLink({ href, label }: { href: string; label: string }) {
   const pathname = usePathname();
-  const lenis = useLenis();
   const isHash = href.startsWith("#");
   const isActive = !isHash && (pathname === href || pathname.startsWith(`${href}/`));
 
-  function onClick(e: React.MouseEvent<HTMLAnchorElement>) {
-    if (!isHash) return;
-    e.preventDefault();
-    const id = href.slice(1);
-    const el = document.getElementById(id);
-    if (!el) return;
+  const className = cn(
+    "relative pb-1 text-sm font-medium transition-colors",
+    isActive
+      ? "text-foreground after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:rounded-full after:bg-primary-accent"
+      : "text-muted-foreground hover:text-foreground",
+  );
 
-    // sticky header ~64px
-    if (lenis) {
-      lenis.scrollTo(el, { offset: -80, duration: 1.2 });
-    } else {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-
-    history.pushState(null, "", href);
+  if (isHash) {
+    return (
+      <a href={href} className={className}>
+        {label}
+      </a>
+    );
   }
 
   return (
-    <Link
-      href={href}
-      onClick={onClick}
-      className={cn(
-        "relative pb-1 text-sm font-medium transition-colors",
-        isActive
-          ? "text-foreground after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:rounded-full after:bg-primary-accent"
-          : "text-muted-foreground hover:text-foreground",
-      )}
-    >
+    <Link href={href} className={className}>
       {label}
     </Link>
   );

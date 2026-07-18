@@ -1,17 +1,27 @@
 import z from "zod";
-import { agentProcedure, authenticatedProcedure, csrfProtectedProcedure, router } from "../../trpc";
+import { TRPCError } from "@trpc/server";
+import { agentProcedure, authenticatedProcedure, router } from "../../trpc";
 import { generatePath } from "../../utils/path-generator";
 import { chatService, CorsairAgent } from "../../services";
 import { zodUndefinedModel } from "../../schema";
 import { chatThreadModel, chatMessageModel } from "@repo/services/chat/model";
+
 const TAGS = ["Agent"];
 const getPath = generatePath("/agent");
+
+function assertNotAborted(signal: AbortSignal) {
+  if (signal.aborted) {
+    throw new TRPCError({ code: "CLIENT_CLOSED_REQUEST", message: "Request aborted" });
+  }
+}
 
 export const agentsRouter = router({
   runAgent: agentProcedure
     .input(z.object({ prompt: z.string().min(1), threadId: z.string().uuid().optional() }))
     .output(z.object({ output: z.string(), threadId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      assertNotAborted(ctx.signal);
+
       const thread = input.threadId
         ? await chatService.getThreadForUser(ctx.user, input.threadId)
         : await chatService.createThread(ctx.user, input.prompt.slice(0, 60));
@@ -23,8 +33,21 @@ export const agentsRouter = router({
         content: input.prompt,
       });
 
+      assertNotAborted(ctx.signal);
+
       const history = await chatService.buildContext(ctx.user, thread.id);
-      const output = (await new CorsairAgent(ctx.user).executePrompt(input.prompt, history)) ?? "";
+      let output: string;
+      try {
+        output =
+          (await new CorsairAgent(ctx.user).executePrompt(input.prompt, history, ctx.signal)) ?? "";
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          throw new TRPCError({ code: "CLIENT_CLOSED_REQUEST", message: "Request aborted" });
+        }
+        throw e;
+      }
+
+      assertNotAborted(ctx.signal);
 
       await chatService.appendMessage({
         userId: ctx.user,
@@ -35,7 +58,6 @@ export const agentsRouter = router({
 
       return { output, threadId: thread.id };
     }),
-  // plus queries
   listThreads: authenticatedProcedure
     .input(zodUndefinedModel)
     .output(z.array(chatThreadModel))

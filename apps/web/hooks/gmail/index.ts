@@ -37,3 +37,10 @@ export const gmailListByLabel = (input: RouterInputs["gmail"]["listByLabel"], en
       enabled: enabled && !!input.labelId,
     }),
   );
+export const gmailListByCategory = (
+  input: RouterInputs["gmail"]["listByCategory"],
+  enabled = true,
+) =>
+  pickQueryState(
+    trpc.gmail.listByCategory.useQuery(input, { enabled: enabled && !!input.category }),
+  );

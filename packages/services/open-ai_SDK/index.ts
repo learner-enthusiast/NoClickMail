@@ -42,7 +42,11 @@ export default class TenantCorsairAgent {
     });
   }
 
-  async executePrompt(userPrompt: string, history: PriorTurn[] = []) {
+  async executePrompt(userPrompt: string, history: PriorTurn[] = [], signal?: AbortSignal) {
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
     // Map stored history → agent input items, then append the new user turn.
     const input = [
       ...history.map((m) => ({ role: m.role, content: m.content }) as AgentInputItem),
@@ -50,6 +54,11 @@ export default class TenantCorsairAgent {
     ];
 
     const summary = await run(this.summaryAgent, JSON.stringify(input));
+
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
     const result = await run(this.corsairAgent, summary.finalOutput ?? "");
     return result.finalOutput;
   }

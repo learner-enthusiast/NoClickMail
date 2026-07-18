@@ -10,6 +10,7 @@ import {
   Paperclip,
   Image as ImageIcon,
   CalendarPlus,
+  Square,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { runAgent, agentThreadMessages, agentThreads } from "~/hooks/agent.ts";
@@ -17,10 +18,12 @@ import { trpc } from "~/trpc/client";
 import { cn } from "~/lib/utils";
 
 import { gmailSentContacts } from "~/hooks/gmail";
+import { agentAbort, isAbortError } from "~/lib/agent-abort";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../tooltip";
 import { createCalendarEvent } from "~/hooks/calendar";
 import { toast } from "sonner";
 import CalendarInviteDialog from "../../calendarinvite";
+import { ThinkingBubble } from "./ThinkingBubble";
 const QUICK_ACTIONS = [
   { label: "Summarize", icon: FileText, prompt: "Summarize the key risks in the selected report." },
   { label: "Draft", icon: PenLine, prompt: "Draft a concise response to the selected email." },
@@ -78,18 +81,14 @@ function Transcript({
       ))}
       {/* Optimistic: show the in-flight user turn before the server round-trip persists it */}
       {pendingUser && <Bubble role="user" content={pendingUser} />}
-      {isRunning && (
-        <div className="mr-auto max-w-[85%] rounded-2xl rounded-tl-sm bg-secondary px-4 py-3 text-sm text-muted-foreground">
-          Thinking…
-        </div>
-      )}
+      {isRunning && <ThinkingBubble />}
     </>
   );
 }
 
 export function Chat() {
   const utils = trpc.useUtils();
-  const { mutateAsync, status } = runAgent();
+  const { mutateAsync, reset, status } = runAgent();
   const { data: threads } = agentThreads();
 
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -132,20 +131,42 @@ export function Chat() {
     const text = prompt.trim();
     if (!text || isRunning) return;
 
+    agentAbort.abort();
+    agentAbort.set(new AbortController());
+
     setInput("");
     setPendingUser(text);
 
+    const activeThreadId = threadId;
+
     try {
-      const res = await mutateAsync({ prompt: text, threadId: threadId ?? undefined });
+      const res = await mutateAsync({ prompt: text, threadId: activeThreadId ?? undefined });
       setThreadId(res.threadId);
-      // Persisted messages are the source of truth → refetch this thread.
       await utils.agent.threadMessages.invalidate({ threadId: res.threadId });
       await utils.agent.listThreads.invalidate();
     } catch (e) {
+      if (isAbortError(e)) {
+        toast.message("Stopped");
+        await utils.agent.listThreads.invalidate();
+        const latest = await utils.agent.listThreads.fetch();
+        const id = activeThreadId ?? latest[0]?.id;
+        if (id) {
+          setThreadId(id);
+          await utils.agent.threadMessages.invalidate({ threadId: id });
+        }
+        return;
+      }
       console.error(e);
+      toast.error("Something went wrong");
     } finally {
+      agentAbort.set(null);
       setPendingUser(null);
     }
+  }
+
+  function stopGeneration() {
+    agentAbort.abort();
+    reset();
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -229,11 +250,7 @@ export function Chat() {
               </div>
             )}
             {pendingUser && <Bubble role="user" content={pendingUser} />}
-            {isRunning && (
-              <div className="mr-auto max-w-[85%] rounded-2xl rounded-tl-sm bg-secondary px-4 py-3 text-sm text-muted-foreground">
-                Thinking…
-              </div>
-            )}
+            {isRunning && <ThinkingBubble />}
           </>
         )}
       </div>
@@ -347,14 +364,20 @@ export function Chat() {
 
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground">Orion 2.4 Ultra</span>
-              <Button
-                type="submit"
-                size="icon-sm"
-                disabled={isRunning || !input.trim()}
-                aria-label="Send"
-              >
-                <Send className="size-4" />
-              </Button>
+              {isRunning ? (
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  onClick={stopGeneration}
+                  aria-label="Stop generating"
+                >
+                  <Square className="size-4 fill-current" />
+                </Button>
+              ) : (
+                <Button type="submit" size="icon-sm" disabled={!input.trim()} aria-label="Send">
+                  <Send className="size-4" />
+                </Button>
+              )}
             </div>
           </div>
         </div>

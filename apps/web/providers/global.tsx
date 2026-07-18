@@ -39,9 +39,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
           isRoot ? "min-h-0 overflow-y-auto" : "min-h-0 overflow-hidden",
         )}
       >
-        {children}
+        {/* Lenis needs a distinct content child to measure scroll height correctly */}
+        <div data-scroll-content={isRoot ? "" : undefined} className={isRoot ? "min-h-full" : "h-full"}>
+          {children}
+          {isRoot && <Footer />}
+        </div>
       </main>
-      {isRoot && <Footer />}
     </div>
   );
 

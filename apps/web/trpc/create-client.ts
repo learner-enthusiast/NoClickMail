@@ -1,4 +1,5 @@
 import { httpLink, httpBatchStreamLink } from "@repo/trpc/client";
+import { agentAbort } from "~/lib/agent-abort";
 import { env } from "~/env.js";
 
 interface CreateTRPCHttpBatchClientClientOpts {
@@ -22,6 +23,7 @@ export const createTRPCHttpBatchClientClient = (opts?: CreateTRPCHttpBatchClient
       return fetch(url, {
         ...options,
         credentials: "include",
+        signal: agentAbort.signal() ?? options?.signal,
       });
     },
   });

@@ -194,3 +194,15 @@ export const listByLabelInputModel = listMessagesPaginationModel.extend({
   labelId: z.string().min(1).describe("Gmail label id, e.g. INBOX or Label_12"),
 });
 export type ListByLabelInputModelType = z.infer<typeof listByLabelInputModel>;
+export const gmailInboxCategoryModel = z.enum([
+  "primary_unread",
+  "promotions",
+  "social",
+  "updates",
+  "subscriptions",
+]);
+
+export const listByCategoryInputModel = listMessagesPaginationModel.extend({
+  category: gmailInboxCategoryModel,
+});
+export type ListByCategoryInputModelType = z.infer<typeof listByCategoryInputModel>;

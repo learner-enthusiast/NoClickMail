@@ -7,7 +7,7 @@ const DescriptiveSection = () => {
       <p className="text-2xl text-muted-foreground">
         Engineered for high-output professionals who value mental clarity .
       </p>
-      <div id="workflows">
+      <div id="workflows" className="scroll-mt-20">
         <AnimationContainer />
       </div>
     </div>

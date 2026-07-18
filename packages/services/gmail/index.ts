@@ -8,6 +8,7 @@ import type {
   GmailDraftDetailType,
   GmailMessageDetailType,
   GmailMessageSummaryType,
+  ListByCategoryInputModelType,
   ListByLabelInputModelType,
   ListDraftsInputModelType,
   ListInboxInputModelType,
@@ -199,7 +200,7 @@ class GmailService {
       for (const headerName of ["To", "Cc", "Bcc"] as const) {
         const value = this.header(msg, headerName);
         if (!value) continue;
-
+        console.log(value);
         for (const { email, name } of this.parseAddresses(value)) {
           const key = email.toLowerCase();
           const existing = byEmail.get(key);
@@ -391,6 +392,39 @@ class GmailService {
   ): Promise<ListMessagesOutputModelType> {
     const { labelId, ...pagination } = input;
     return this.listByLabels(tenantId, pagination, [labelId]);
+  }
+  CATEGORY_QUERY: Record<
+    ListByCategoryInputModelType["category"],
+    { labelIds?: string[]; q: string }
+  > = {
+    primary_unread: {
+      labelIds: ["INBOX"],
+      q: "category:primary is:unread",
+    },
+    promotions: {
+      labelIds: ["INBOX"],
+      q: "category:promotions",
+    },
+    social: {
+      labelIds: ["INBOX"],
+      q: "category:social",
+    },
+    updates: {
+      labelIds: ["INBOX"],
+      q: "category:updates",
+    },
+    subscriptions: {
+      // no CATEGORY_SUBSCRIPTIONS — approximate with forums / unsubscribe signals
+      labelIds: ["INBOX"],
+      q: 'category:forums OR unsubscribe OR list-id OR "manage subscription"',
+    },
+  };
+
+  async listByCategory(tenantId: string, input: ListByCategoryInputModelType) {
+    const { category, q: userQ, ...pagination } = input;
+    const cfg = this.CATEGORY_QUERY[category];
+    const q = [cfg.q, userQ].filter(Boolean).join(" ");
+    return this.listByLabels(tenantId, { ...pagination, q }, cfg.labelIds ?? []);
   }
 }
 

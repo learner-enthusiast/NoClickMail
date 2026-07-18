@@ -7,6 +7,8 @@ export interface TRPCContext {
   clearCookie: ReturnType<typeof clearCookieFactory>;
   getHeader: (name: string) => string | undefined;
   ip: string;
+  /** Aborts when the client disconnects (e.g. user hits Stop). */
+  signal: AbortSignal;
 }
 
 export async function createContext({
@@ -14,6 +16,14 @@ export async function createContext({
   res,
 }: CreateExpressContextOptions): Promise<TRPCContext> {
   const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
+  const abortController = new AbortController();
+
+  const onClose = () => {
+    if (!res.writableFinished) abortController.abort();
+  };
+  req.on("close", onClose);
+  res.on("finish", () => req.off("close", onClose));
+
   const ctx: TRPCContext = {
     createCookie: createCookieFactory(res),
     getCookie: getCookieFactory(req),
@@ -23,6 +33,7 @@ export async function createContext({
       return Array.isArray(value) ? value[0] : value;
     },
     ip,
+    signal: abortController.signal,
   };
   return ctx;
 }
