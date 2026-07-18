@@ -5,20 +5,24 @@ import { app as expressApplication } from "./server";
 import { env } from "./env";
 import { checkDatabaseConnection } from "@repo/database";
 
-const DB_HEALTH_CHECK_INTERVAL_MS = 30_000;
-
+const DB_HEALTH_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const DB_RETRY_INTERVAL_MS = 30_000; // retry every 30s while down
 function startDatabaseHealthCheck() {
-  setInterval(async () => {
+  const scheduleNext = (delayMs: number) => {
+    setTimeout(runCheck, delayMs);
+  };
+  const runCheck = async () => {
     try {
       await checkDatabaseConnection();
       logger.debug("database connection OK");
+      scheduleNext(DB_HEALTH_CHECK_INTERVAL_MS);
     } catch (err) {
-      logger.error("Database health check failed", { err });
-      throw err;
+      logger.error("Database health check failed, retrying...", { err });
+      scheduleNext(DB_RETRY_INTERVAL_MS);
     }
-  }, DB_HEALTH_CHECK_INTERVAL_MS);
+  };
+  scheduleNext(DB_HEALTH_CHECK_INTERVAL_MS);
 }
-
 async function init() {
   try {
     await checkDatabaseConnection();

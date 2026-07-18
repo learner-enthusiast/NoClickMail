@@ -51,12 +51,7 @@ export function MailMessageList({
   emptyLabel = "No messages.",
 }: MailMessageListProps) {
   return (
-    <div
-      className={cn(
-        "flex flex-col border-r border-border",
-        selectedId ? "hidden w-full md:flex md:w-[360px]" : "w-full",
-      )}
-    >
+    <div className={cn("flex flex-col border-r border-border")}>
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-headline-sm font-bold text-foreground">{title}</h2>
         <span className="text-xs text-muted-foreground">{messages.length} messages</span>

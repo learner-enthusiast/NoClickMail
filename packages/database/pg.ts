@@ -2,16 +2,25 @@ import pg from "pg";
 
 import { env } from "./env";
 
-/** Neon and other hosted Postgres URLs need SSL. */
+/** Hosted Postgres (Neon, Supabase, etc.) needs SSL. */
+export function isHostedPostgres(connectionString: string) {
+  return (
+    connectionString.includes("neon.tech") ||
+    connectionString.includes("supabase.com") ||
+    connectionString.includes("pooler.")
+  );
+}
+
+/** @deprecated use isHostedPostgres */
 export function isNeonDatabase(connectionString: string) {
-  return connectionString.includes("neon.tech");
+  return isHostedPostgres(connectionString);
 }
 
 export function pgConnectionConfig(connectionString: string): pg.ClientConfig {
   const config: pg.ClientConfig = { connectionString };
 
   if (
-    isNeonDatabase(connectionString) ||
+    isHostedPostgres(connectionString) ||
     /sslmode=(require|verify-full|verify-ca)/i.test(connectionString)
   ) {
     config.ssl = { rejectUnauthorized: false };
@@ -25,7 +34,7 @@ export function pgConnectionConfig(connectionString: string): pg.ClientConfig {
 export function createPgPool(connectionString = env.DATABASE_URL) {
   return new pg.Pool({
     ...pgConnectionConfig(connectionString),
-    max: isNeonDatabase(connectionString) ? 5 : 10,
+    max: isHostedPostgres(connectionString) ? 5 : 10,
   });
 }
 

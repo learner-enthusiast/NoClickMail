@@ -1,25 +1,14 @@
 "use client";
 
-import { Chat } from "~/components/ui/orion/dashboard/Chat";
 import { Inbox } from "~/components/ui/orion/dashboard/Inbox";
-import { SideBar } from "~/components/ui/orion/dashboard/SideBar";
-import { connectionStatus } from "~/hooks/connections";
+import { RequireConnection } from "~/components/ui/orion/glitches/RequireConnection";
 
-// const API_BASE = (env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/trpc").replace(
-//   /\/trpc\/?$/,
-//   "",
-// );
-
-// const PROVIDERS = [
-//   { id: "gmail", label: "Gmail" },
-//   { id: "googlecalendar", label: "Google Calendar" },
-// ] as const;
-
-function Connections() {
+export default function InboxPage() {
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full">
-      <Inbox />
+    <div className="h-full min-h-0 w-full">
+      <RequireConnection require="gmail">
+        <Inbox />
+      </RequireConnection>
     </div>
   );
 }
-export default Connections;

@@ -6,9 +6,11 @@ import {
   getMessageInputModel,
   gmailDraftDetailModel,
   gmailMessageDetailModel,
+  listByLabelInputModel,
   listDraftsInputModel,
   listInboxInputModel,
   listInboxOutputModel,
+  listLabelsOutputModel,
   listMessagesOutputModel,
   listSentContactsInputModel,
   listSentContactsOutputModel,
@@ -23,6 +25,7 @@ import {
 } from "@repo/services/gmail/model";
 import { authenticatedProcedure, csrfProtectedProcedure, router } from "../../trpc";
 import { generatePath } from "../../utils/path-generator";
+import { zodUndefinedModel } from "../../schema";
 
 const TAGS = ["Gmail"];
 const getPath = generatePath("/gmail");
@@ -88,4 +91,15 @@ export const gmailRouter = router({
     .input(getDraftInputModel)
     .output(gmailDraftDetailModel)
     .query(({ ctx, input }) => gmailService.getDraft(ctx.user, input)),
+  listLabels: authenticatedProcedure
+    .meta({ openapi: { method: "GET", path: getPath("/labels"), tags: TAGS } })
+    .input(zodUndefinedModel) // or z.void() / empty object if that's your pattern
+    .output(listLabelsOutputModel)
+    .query(({ ctx }) => gmailService.listLabels(ctx.user)),
+
+  listByLabel: authenticatedProcedure
+    .meta({ openapi: { method: "GET", path: getPath("/label/messages"), tags: TAGS } })
+    .input(listByLabelInputModel)
+    .output(listMessagesOutputModel)
+    .query(({ ctx, input }) => gmailService.listByLabel(ctx.user, input)),
 });

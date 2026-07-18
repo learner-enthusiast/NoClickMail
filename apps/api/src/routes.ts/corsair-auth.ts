@@ -138,84 +138,84 @@ async function registerGmailWatch(tenantId: string) {
  * for the same tenant, creating the Calendar account row if it does not exist.
  * Only works if the Gmail consent screen also granted calendar scopes.
  */
-async function duplicateGmailTokensToCalendar(tenantId: string): Promise<boolean> {
-  const calendarIntegration = await db
-    .select()
-    .from(corsairIntegrations)
-    .where(eq(corsairIntegrations.name, "googlecalendar"))
-    .then((rows) => rows[0]);
+// async function duplicateGmailTokensToCalendar(tenantId: string): Promise<boolean> {
+//   const calendarIntegration = await db
+//     .select()
+//     .from(corsairIntegrations)
+//     .where(eq(corsairIntegrations.name, "googlecalendar"))
+//     .then((rows) => rows[0]);
 
-  if (!calendarIntegration) return false;
+//   if (!calendarIntegration) return false;
 
-  const gmailIntegration = await db
-    .select()
-    .from(corsairIntegrations)
-    .where(eq(corsairIntegrations.name, "gmail"))
-    .then((rows) => rows[0]);
-  if (!gmailIntegration) return false;
+//   const gmailIntegration = await db
+//     .select()
+//     .from(corsairIntegrations)
+//     .where(eq(corsairIntegrations.name, "gmail"))
+//     .then((rows) => rows[0]);
+//   if (!gmailIntegration) return false;
 
-  const gmailAccount = await db
-    .select()
-    .from(corsairAccounts)
-    .where(
-      and(
-        eq(corsairAccounts.tenantId, tenantId),
-        eq(corsairAccounts.integrationId, gmailIntegration.id),
-      ),
-    )
-    .then((rows) => rows[0]);
-  if (!gmailAccount) return false;
+//   const gmailAccount = await db
+//     .select()
+//     .from(corsairAccounts)
+//     .where(
+//       and(
+//         eq(corsairAccounts.tenantId, tenantId),
+//         eq(corsairAccounts.integrationId, gmailIntegration.id),
+//       ),
+//     )
+//     .then((rows) => rows[0]);
+//   if (!gmailAccount) return false;
 
-  // Create the Calendar account row inside a transaction to avoid duplicate races.
-  await db.transaction(async (tx) => {
-    const existing = await tx
-      .select()
-      .from(corsairAccounts)
-      .where(
-        and(
-          eq(corsairAccounts.tenantId, tenantId),
-          eq(corsairAccounts.integrationId, calendarIntegration.id),
-        ),
-      )
-      .then((rows) => rows[0]);
+//   // Create the Calendar account row inside a transaction to avoid duplicate races.
+//   await db.transaction(async (tx) => {
+//     const existing = await tx
+//       .select()
+//       .from(corsairAccounts)
+//       .where(
+//         and(
+//           eq(corsairAccounts.tenantId, tenantId),
+//           eq(corsairAccounts.integrationId, calendarIntegration.id),
+//         ),
+//       )
+//       .then((rows) => rows[0]);
 
-    if (!existing) {
-      await tx.insert(corsairAccounts).values({
-        id: crypto.randomUUID(),
-        tenantId,
-        integrationId: calendarIntegration.id,
-        config: {},
-        dek: gmailAccount.dek,
-      });
-    }
-  });
+//     if (!existing) {
+//       await tx.insert(corsairAccounts).values({
+//         id: crypto.randomUUID(),
+//         tenantId,
+//         integrationId: calendarIntegration.id,
+//         config: {},
+//         dek: gmailAccount.dek,
+//       });
+//     }
+//   });
 
-  const gmailAccountKm = createAccountKeyManager({
-    authType: "oauth_2",
-    integrationName: "gmail",
-    tenantId,
-    kek: KEK,
-    database,
-  });
-  const calendarAccountKm = createAccountKeyManager({
-    authType: "oauth_2",
-    integrationName: "googlecalendar",
-    tenantId,
-    kek: KEK,
-    database,
-  });
+//   const gmailAccountKm = createAccountKeyManager({
+//     authType: "oauth_2",
+//     integrationName: "gmail",
+//     tenantId,
+//     kek: KEK,
+//     database,
+//   });
+//   const calendarAccountKm = createAccountKeyManager({
+//     authType: "oauth_2",
+//     integrationName: "googlecalendar",
+//     tenantId,
+//     kek: KEK,
+//     database,
+//   });
 
-  const accessToken = await gmailAccountKm.get_access_token();
-  const refreshToken = await gmailAccountKm.get_refresh_token();
-  const expiresAt = await gmailAccountKm.get_expires_at();
+//   const accessToken = await gmailAccountKm.get_access_token();
+//   const refreshToken = await gmailAccountKm.get_refresh_token();
+//   const expiresAt = await gmailAccountKm.get_expires_at();
 
-  if (accessToken) await calendarAccountKm.set_access_token(accessToken);
-  if (refreshToken) await calendarAccountKm.set_refresh_token(refreshToken);
-  if (expiresAt) await calendarAccountKm.set_expires_at(expiresAt);
+//   if (accessToken) await calendarAccountKm.set_access_token(accessToken);
+//   if (refreshToken) await calendarAccountKm.set_refresh_token(refreshToken);
+//   if (expiresAt) await calendarAccountKm.set_expires_at(expiresAt);
 
-  logger.info("Copied Google tokens from Gmail to Calendar account", { tenantId });
-  return true;
-}
+//   logger.info("Copied Google tokens from Gmail to Calendar account", { tenantId });
+//   return true;
+// }
 
 /** Register a Google Calendar push-notification watch (needs a public HTTPS webhook URL). */
 async function registerCalendarWatch(tenantId: string) {

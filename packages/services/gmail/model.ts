@@ -174,3 +174,23 @@ export const gmailDraftDetailModel = gmailMessageDetailModel.extend({
   messageId: z.string().optional(),
 });
 export type GmailDraftDetailType = z.infer<typeof gmailDraftDetailModel>;
+/** GET /gmail/labels */
+export const gmailLabelModel = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string().nullable(), // "system" | "user"
+  messagesTotal: z.number().int().nullable().optional(),
+  messagesUnread: z.number().int().nullable().optional(),
+});
+export type GmailLabelModelType = z.infer<typeof gmailLabelModel>;
+
+export const listLabelsOutputModel = z.object({
+  labels: z.array(gmailLabelModel),
+});
+export type ListLabelsOutputModelType = z.infer<typeof listLabelsOutputModel>;
+
+/** GET /gmail/label/messages */
+export const listByLabelInputModel = listMessagesPaginationModel.extend({
+  labelId: z.string().min(1).describe("Gmail label id, e.g. INBOX or Label_12"),
+});
+export type ListByLabelInputModelType = z.infer<typeof listByLabelInputModel>;

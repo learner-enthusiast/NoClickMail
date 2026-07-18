@@ -8,9 +8,11 @@ import type {
   GmailDraftDetailType,
   GmailMessageDetailType,
   GmailMessageSummaryType,
+  ListByLabelInputModelType,
   ListDraftsInputModelType,
   ListInboxInputModelType,
   ListInboxOutputModelType,
+  ListLabelsOutputModelType,
   ListMessagesOutputModelType,
   ListMessagesPaginationModelType,
   ListSentContactsInputModelType,
@@ -352,6 +354,43 @@ class GmailService {
       bodyText: text,
       bodyHtml: html,
     };
+  }
+  async listLabels(tenantId: string): Promise<ListLabelsOutputModelType> {
+    const gmail = this.gmail(tenantId);
+    const res = await gmail.labels.list({});
+
+    const labels = await Promise.all(
+      (res.labels ?? []).map(async (l) => {
+        if (!l.id) {
+          return {
+            id: "",
+            name: l.name ?? "",
+            type: l.type ?? null,
+            messagesTotal: null,
+            messagesUnread: null,
+          };
+        }
+
+        const full = await gmail.labels.get({ id: l.id });
+        return {
+          id: full.id ?? l.id,
+          name: full.name ?? l.name ?? "",
+          type: full.type ?? l.type ?? null,
+          messagesTotal: full.messagesTotal ?? null,
+          messagesUnread: full.messagesUnread ?? null,
+        };
+      }),
+    );
+
+    return { labels };
+  }
+
+  async listByLabel(
+    tenantId: string,
+    input: ListByLabelInputModelType,
+  ): Promise<ListMessagesOutputModelType> {
+    const { labelId, ...pagination } = input;
+    return this.listByLabels(tenantId, pagination, [labelId]);
   }
 }
 
