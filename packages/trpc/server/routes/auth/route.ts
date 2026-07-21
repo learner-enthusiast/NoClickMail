@@ -1,4 +1,6 @@
 import { userService } from "../../services";
+import * as JWT from "jsonwebtoken";
+import { env } from "@repo/services/env";
 import {
   createUserWithEmailandPasswordInputModel,
   createUserWithEmailandPasswordOutputModel,
@@ -17,9 +19,11 @@ import {
   changePasswordInputModel,
   changePasswordOutputModel,
   getAuthenticationMethodOutputSchema,
+  type GenerateUSerTokenPayload,
 } from "@repo/services/user/model";
 import {
   authenticatedProcedure,
+  csrfProcedure,
   csrfProtectedProcedure,
   publicProcedure,
   router,
@@ -28,8 +32,7 @@ import { generatePath } from "../../utils/path-generator";
 import {
   AUTHENTICATION_COOKIE_NAME_ACCESS,
   AUTHENTICATION_COOKIE_NAME_REFRESH,
-  clearAuthenticationCookie,
-  clearCsrfCookie,
+  clearAllSessionCookies,
   setAuthenticationCookie,
   setCsrfCookie,
 } from "../../cookie";
@@ -37,6 +40,32 @@ import { zodUndefinedModel } from "../../schema";
 import { z } from "zod";
 const TAGS = ["Authentication"];
 const getPath = generatePath("/authentication");
+
+function resolveLogoutUserId(ctx: {
+  getCookie: (name: string) => string | undefined;
+}): string | undefined {
+  for (const cookieName of [
+    AUTHENTICATION_COOKIE_NAME_ACCESS,
+    AUTHENTICATION_COOKIE_NAME_REFRESH,
+  ] as const) {
+    const token = ctx.getCookie(cookieName);
+    if (!token) continue;
+
+    try {
+      const secret =
+        cookieName === AUTHENTICATION_COOKIE_NAME_ACCESS
+          ? env.ACCESS_TOKEN_SECRET
+          : env.REFRESH_TOKEN_SECRET;
+      const decoded = JWT.verify(token, secret) as GenerateUSerTokenPayload;
+      if (decoded.id) return decoded.id;
+    } catch {
+      const decoded = JWT.decode(token) as GenerateUSerTokenPayload | null;
+      if (decoded?.id) return decoded.id;
+    }
+  }
+
+  return undefined;
+}
 
 export const authRouter = router({
   getSupportedAuthenticationProviders: publicProcedure
@@ -79,15 +108,16 @@ export const authRouter = router({
       return { id, access_token, refresh_token, csrfToken };
     }),
 
-  logout: csrfProtectedProcedure
+  logout: csrfProcedure
     .meta({ openapi: { method: "POST", path: getPath("/logout"), tags: TAGS } })
     .input(zodUndefinedModel)
     .output(logoutUserOutputModel)
-    .query(async ({ ctx }) => {
-      await userService.logout({ userId: ctx.user });
-      clearAuthenticationCookie(ctx, AUTHENTICATION_COOKIE_NAME_ACCESS);
-      clearAuthenticationCookie(ctx, AUTHENTICATION_COOKIE_NAME_REFRESH);
-      clearCsrfCookie(ctx);
+    .mutation(async ({ ctx }) => {
+      const userId = resolveLogoutUserId(ctx);
+      if (userId) {
+        await userService.logout({ userId });
+      }
+      clearAllSessionCookies(ctx);
       return { success: true };
     }),
   refreshToken: publicProcedure

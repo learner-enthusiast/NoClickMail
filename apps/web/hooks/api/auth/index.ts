@@ -32,7 +32,7 @@ export const changePassword = () => {
 };
 
 export const logout = () => {
-  return pickQueryState(trpc.auth.logout.useQuery());
+  return pickMutationState(trpc.auth.logout.useMutation());
 };
 
 export const me = () => {

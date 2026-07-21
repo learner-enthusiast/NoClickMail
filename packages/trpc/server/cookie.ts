@@ -75,6 +75,17 @@ export function clearCookieFactory(res: Response) {
   };
 }
 
+/** Clear a cookie set with shared domain and legacy host-only variants. */
+export function clearCookieEverywhere(
+  ctx: TRPCContext,
+  name: string,
+  opts: CookieOptions = defaultCookieOptions,
+) {
+  ctx.clearCookie(name, opts);
+  const { domain: _domain, ...hostOnlyOpts } = opts;
+  ctx.clearCookie(name, hostOnlyOpts);
+}
+
 export const AUTHENTICATION_COOKIE_NAME_ACCESS = "access_authentication-token";
 export const AUTHENTICATION_COOKIE_NAME_REFRESH = "refresh_authentication-token";
 
@@ -94,7 +105,7 @@ export function getAuthenticationCookie(
 }
 
 export function clearAuthenticationCookie(ctx: TRPCContext, AUTHENTICATION_COOKIE_NAME: string) {
-  ctx.clearCookie(AUTHENTICATION_COOKIE_NAME);
+  clearCookieEverywhere(ctx, AUTHENTICATION_COOKIE_NAME);
 }
 
 export const CSRF_COOKIE_NAME = "csrf_token";
@@ -106,7 +117,13 @@ export function setCsrfCookie(ctx: TRPCContext, token: string) {
 }
 
 export function clearCsrfCookie(ctx: TRPCContext) {
-  ctx.clearCookie(CSRF_COOKIE_NAME, csrfCookieOptions);
+  clearCookieEverywhere(ctx, CSRF_COOKIE_NAME, csrfCookieOptions);
+}
+
+export function clearAllSessionCookies(ctx: TRPCContext) {
+  clearAuthenticationCookie(ctx, AUTHENTICATION_COOKIE_NAME_ACCESS);
+  clearAuthenticationCookie(ctx, AUTHENTICATION_COOKIE_NAME_REFRESH);
+  clearCsrfCookie(ctx);
 }
 
 export function getCsrfCookie(ctx: TRPCContext) {

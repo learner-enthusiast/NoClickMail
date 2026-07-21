@@ -72,6 +72,20 @@ export const csrfProtectedProcedure = authenticatedProcedure.use((options) => {
 
   return options.next();
 });
+
+/** CSRF on mutations without requiring a valid access token (e.g. logout with expired JWT). */
+export const csrfProcedure = publicProcedure.use((options) => {
+  if (options.type !== "mutation") return options.next();
+
+  const csrfCookie = getCsrfCookie(options.ctx);
+  const csrfHeader = options.ctx.getHeader("x-csrf-token");
+
+  if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "CSRF token mismatch" });
+  }
+
+  return options.next();
+});
 function createRateLimitMiddleware(opts: RateLimitOptions) {
   return tRPCContext.middleware(async ({ ctx, next }) => {
     const user = "user" in ctx ? (ctx as { user?: string }).user : undefined;

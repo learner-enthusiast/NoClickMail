@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import React, { createContext, useCallback, useContext, useEffect, useMemo } from "react";
 import type { RouterInputs, RouterOutputs } from "@repo/trpc/client";
 import { trpc } from "~/trpc/client";
+import { clearCsrfCookieClient } from "~/lib/clear-csrf-cookie";
 
 type User = RouterOutputs["auth"]["me"];
 type LoginInput = RouterInputs["auth"]["loginUserWithEmailandPassword"];
@@ -101,11 +102,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [signUpMutation],
   );
 
+  const logoutMutation = trpc.auth.logout.useMutation();
+
   const logout = useCallback(async () => {
-    await utils.client.auth.logout.query();
-    utils.auth.me.reset();
-    router.replace("/");
-  }, [router, utils]);
+    try {
+      await logoutMutation.mutateAsync();
+    } finally {
+      clearCsrfCookieClient();
+      utils.auth.me.reset();
+      await utils.auth.me.invalidate();
+      router.replace("/");
+    }
+  }, [logoutMutation, router, utils]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -120,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       isLoggingIn: loginMutation.isPending,
       isSigningUp: signUpMutation.isPending,
-      isLoggingOut: false,
+      isLoggingOut: logoutMutation.isPending,
     }),
     [
       user,
@@ -134,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       loginMutation.isPending,
       signUpMutation.isPending,
+      logoutMutation.isPending,
     ],
   );
 
