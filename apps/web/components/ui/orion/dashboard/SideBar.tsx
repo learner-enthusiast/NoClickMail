@@ -156,7 +156,9 @@ export function SideBar() {
 
         <button
           type="button"
-          onClick={() => logout()}
+          onClick={async () => {
+            await logout();
+          }}
           disabled={isLoggingOut}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:opacity-50"
         >
