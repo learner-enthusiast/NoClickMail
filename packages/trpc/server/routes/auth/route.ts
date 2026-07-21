@@ -29,8 +29,9 @@ import {
   AUTHENTICATION_COOKIE_NAME_ACCESS,
   AUTHENTICATION_COOKIE_NAME_REFRESH,
   clearAuthenticationCookie,
-  defaultCookieOptions,
+  clearCsrfCookie,
   setAuthenticationCookie,
+  setCsrfCookie,
 } from "../../cookie";
 import { zodUndefinedModel } from "../../schema";
 import { z } from "zod";
@@ -60,10 +61,7 @@ export const authRouter = router({
         });
       setAuthenticationCookie(ctx, access_token, AUTHENTICATION_COOKIE_NAME_ACCESS);
       setAuthenticationCookie(ctx, refresh_token, AUTHENTICATION_COOKIE_NAME_REFRESH);
-      ctx.createCookie("csrf_token", csrfToken, {
-        ...defaultCookieOptions,
-        httpOnly: false,
-      });
+      setCsrfCookie(ctx, csrfToken);
       return { id, access_token, refresh_token, csrfToken };
     }),
   loginUserWithEmailandPassword: publicProcedure
@@ -76,10 +74,7 @@ export const authRouter = router({
 
       setAuthenticationCookie(ctx, access_token, AUTHENTICATION_COOKIE_NAME_ACCESS);
       setAuthenticationCookie(ctx, refresh_token, AUTHENTICATION_COOKIE_NAME_REFRESH);
-      ctx.createCookie("csrf_token", csrfToken, {
-        ...defaultCookieOptions,
-        httpOnly: false,
-      });
+      setCsrfCookie(ctx, csrfToken);
 
       return { id, access_token, refresh_token, csrfToken };
     }),
@@ -92,7 +87,7 @@ export const authRouter = router({
       await userService.logout({ userId: ctx.user });
       clearAuthenticationCookie(ctx, AUTHENTICATION_COOKIE_NAME_ACCESS);
       clearAuthenticationCookie(ctx, AUTHENTICATION_COOKIE_NAME_REFRESH);
-      ctx.clearCookie("csrf_token", { ...defaultCookieOptions, httpOnly: false });
+      clearCsrfCookie(ctx);
       return { success: true };
     }),
   refreshToken: publicProcedure

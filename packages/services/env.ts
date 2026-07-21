@@ -27,6 +27,8 @@ const envSchema = z.object({
   INNGEST_DEV: z.enum(["0", "1"]).optional(),
   INNGEST_EVENT_KEY: z.string().min(1).optional(),
   INNGEST_SIGNING_KEY: z.string().min(1).optional(),
+  /** Shared cookie domain for web + API subdomains (e.g. .arnabsamanta.in). Auto-derived from CLIENT_URL when unset. */
+  COOKIE_DOMAIN: z.string().min(2).optional(),
 });
 
 function createEnv(env: NodeJS.ProcessEnv) {

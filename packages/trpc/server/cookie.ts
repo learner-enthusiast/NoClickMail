@@ -1,19 +1,55 @@
 import { CookieOptions, Request, Response } from "express";
 import { TRPCContext } from "./context";
 import { env } from "@repo/services/env";
+
 const ONE_MINUTE = 60 * 1000;
 const ONE_HOUR = 60 * ONE_MINUTE;
 const ONE_DAY = 24 * ONE_HOUR;
 const ONE_MONTH = 30 * ONE_DAY;
 const ONE_YEAR = 12 * ONE_MONTH;
 
-export const defaultCookieOptions: CookieOptions = {
-  path: "/",
-  httpOnly: true,
-  secure: env.NODE_ENV === "production",
-  sameSite: "strict",
-  maxAge: ONE_YEAR,
-};
+export const isProductionEnv =
+  env.NODE_ENV === "production" || env.NODE_ENV === "prod";
+
+/** Parent domain for cross-subdomain cookies (orion.* + orionserver.*). */
+export function resolveCookieDomain(): string | undefined {
+  if (env.COOKIE_DOMAIN) return env.COOKIE_DOMAIN;
+
+  try {
+    const { hostname } = new URL(env.CLIENT_URL);
+    if (
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
+    ) {
+      return undefined;
+    }
+
+    const parts = hostname.split(".");
+    if (parts.length >= 3) {
+      return `.${parts.slice(-2).join(".")}`;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+export function sharedCookieOptions(overrides: CookieOptions = {}): CookieOptions {
+  const domain = resolveCookieDomain();
+  return {
+    path: "/",
+    httpOnly: true,
+    secure: isProductionEnv,
+    sameSite: "lax",
+    maxAge: ONE_YEAR,
+    ...(domain ? { domain } : {}),
+    ...overrides,
+  };
+}
+
+export const defaultCookieOptions: CookieOptions = sharedCookieOptions();
 
 export function createCookieFactory(res: Response) {
   return function createCookie(
@@ -60,13 +96,17 @@ export function getAuthenticationCookie(
 export function clearAuthenticationCookie(ctx: TRPCContext, AUTHENTICATION_COOKIE_NAME: string) {
   ctx.clearCookie(AUTHENTICATION_COOKIE_NAME);
 }
+
 export const CSRF_COOKIE_NAME = "csrf_token";
 
+export const csrfCookieOptions = sharedCookieOptions({ httpOnly: false });
+
 export function setCsrfCookie(ctx: TRPCContext, token: string) {
-  ctx.createCookie(CSRF_COOKIE_NAME, token, {
-    ...defaultCookieOptions,
-    httpOnly: false,
-  });
+  ctx.createCookie(CSRF_COOKIE_NAME, token, csrfCookieOptions);
+}
+
+export function clearCsrfCookie(ctx: TRPCContext) {
+  ctx.clearCookie(CSRF_COOKIE_NAME, csrfCookieOptions);
 }
 
 export function getCsrfCookie(ctx: TRPCContext) {

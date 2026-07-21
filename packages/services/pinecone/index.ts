@@ -1,6 +1,10 @@
 import { Pinecone, type RecordMetadata } from "@pinecone-database/pinecone";
 import { env } from "../env";
-import type { QueryVectorsInputModelType, UpsertVectorInputModelType, VectorMatchModelType } from "./model";
+import type {
+  QueryVectorsInputModelType,
+  UpsertVectorInputModelType,
+  VectorMatchModelType,
+} from "./model";
 
 /** Pinecone vector store — one namespace per user for tenant isolation. */
 class PineconeVectorStore {

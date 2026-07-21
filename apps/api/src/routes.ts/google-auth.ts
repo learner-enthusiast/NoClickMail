@@ -2,6 +2,10 @@ import { Router } from "express";
 import * as JWT from "jsonwebtoken";
 import { z } from "zod";
 import { logger } from "@repo/logger";
+import {
+  csrfCookieOptions,
+  defaultCookieOptions,
+} from "@repo/trpc/server/cookie";
 
 import { env as serviceEnv } from "../../../../packages/services/env";
 
@@ -17,16 +21,6 @@ const googleCallbackQuerySchema = z.object({
   error: z.string().optional(),
   error_description: z.string().optional(),
 });
-
-const ONE_YEAR = 365 * 24 * 60 * 60 * 1000;
-
-const authCookieOptions = {
-  path: "/",
-  httpOnly: true,
-  secure: apiEnv.NODE_ENV === "prod" || apiEnv.NODE_ENV === "production",
-  sameSite: "strict" as const,
-  maxAge: ONE_YEAR,
-};
 
 function createAccessToken(userId: string) {
   return JWT.sign({ id: userId }, serviceEnv.ACCESS_TOKEN_SECRET, {
@@ -127,12 +121,9 @@ googleAuthRouter.get("/google/callback", async (req, res) => {
       .set({ refreshToken })
       .where(and(eq(usersTable.id, user.id)));
 
-    res.cookie("access_authentication-token", accessToken, authCookieOptions);
-    res.cookie("refresh_authentication-token", refreshToken, authCookieOptions);
-    res.cookie("csrf_token", csrfToken, {
-      ...authCookieOptions,
-      httpOnly: false,
-    });
+    res.cookie("access_authentication-token", accessToken, defaultCookieOptions);
+    res.cookie("refresh_authentication-token", refreshToken, defaultCookieOptions);
+    res.cookie("csrf_token", csrfToken, csrfCookieOptions);
 
     return res.redirect(apiEnv.CLIENT_URL);
   } catch (error) {
