@@ -50,38 +50,67 @@ function Bubble({ role, content }: { role: "user" | "assistant" | "system"; cont
   );
 }
 
-/** Persisted transcript — only mounted when a thread exists, so the query always has a valid id. */
+function ErrorBubble({ message }: { message: string }) {
+  return (
+    <div className="mr-auto max-w-[85%] rounded-2xl rounded-tl-sm border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+      <p className="whitespace-pre-wrap leading-relaxed">{message}</p>
+    </div>
+  );
+}
+
+function pendingUserVisible(
+  pendingUser: string | null,
+  messages: { role: string; content: string }[] | undefined,
+) {
+  if (!pendingUser) return false;
+  return !messages?.some((m) => m.role === "user" && m.content === pendingUser);
+}
+
+/** Transcript — server messages plus optimistic in-flight user turn. */
 function Transcript({
   threadId,
   pendingUser,
-  isRunning,
+  isBusy,
+  errorMessage,
   scrollRef,
 }: {
-  threadId: string;
+  threadId: string | null;
   pendingUser: string | null;
-  isRunning: boolean;
+  isBusy: boolean;
+  errorMessage: string | null;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const { data: messages, isPending } = agentThreadMessages({ threadId });
+  const { data: messages, isPending } = agentThreadMessages(
+    { threadId: threadId! },
+    threadId !== null,
+  );
+  const showPendingUser = pendingUserVisible(pendingUser, messages);
 
   useEffect(() => {
     requestAnimationFrame(() =>
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }),
     );
-  }, [messages, pendingUser, isRunning, scrollRef]);
+  }, [messages, pendingUser, isBusy, errorMessage, scrollRef]);
 
-  if (isPending) {
-    return <p className="text-sm text-muted-foreground">Loading conversation…</p>;
-  }
+  const showInitialLoading =
+    threadId !== null && isPending && !messages?.length && !showPendingUser && !isBusy;
 
   return (
     <>
+      {!threadId && !pendingUser && !errorMessage && (
+        <div className="rounded-2xl rounded-tl-sm bg-secondary px-4 py-3 text-sm text-foreground">
+          Hello. Ask me to summarize, draft, or rewrite — or anything about your inbox.
+        </div>
+      )}
+      {showInitialLoading && (
+        <p className="text-sm text-muted-foreground">Loading conversation…</p>
+      )}
       {(messages ?? []).map((m) => (
         <Bubble key={m.id} role={m.role} content={m.content} />
       ))}
-      {/* Optimistic: show the in-flight user turn before the server round-trip persists it */}
-      {pendingUser && <Bubble role="user" content={pendingUser} />}
-      {isRunning && <ThinkingBubble />}
+      {showPendingUser && pendingUser && <Bubble role="user" content={pendingUser} />}
+      {isBusy && <ThinkingBubble />}
+      {errorMessage && !isBusy && <ErrorBubble message={errorMessage} />}
     </>
   );
 }
@@ -93,11 +122,14 @@ export function Chat() {
 
   const [threadId, setThreadId] = useState<string | null>(null);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [input, setInput] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isRunning = status === "pending";
+  /** True from the moment Send is clicked until the turn finishes — instant UI feedback. */
+  const isBusy = pendingUser !== null || isRunning;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [mention, setMention] = useState<{ query: string; start: number; caret: number } | null>(
     null,
@@ -127,22 +159,65 @@ export function Chat() {
     }
   }, [threads, threadId]);
 
+  async function syncThreadMessages(preferredThreadId?: string | null) {
+    await utils.agent.listThreads.invalidate();
+    const latest = await utils.agent.listThreads.fetch();
+    const id = preferredThreadId ?? latest[0]?.id;
+    if (id) {
+      setThreadId(id);
+      await utils.agent.threadMessages.invalidate({ threadId: id });
+      await utils.agent.threadMessages.refetch({ threadId: id });
+    }
+    return id;
+  }
+
+  function getErrorMessage(e: unknown): string {
+    if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
+      return e.message;
+    }
+    return "Something went wrong. Please try again.";
+  }
+
   async function send(prompt: string) {
     const text = prompt.trim();
-    if (!text || isRunning) return;
+    if (!text || isBusy) return;
 
     agentAbort.abort();
     agentAbort.set(new AbortController());
 
     setInput("");
     setPendingUser(text);
+    setErrorMessage(null);
 
     const activeThreadId = threadId;
+    const optimisticId = `optimistic-${Date.now()}`;
+
+    if (activeThreadId) {
+      utils.agent.threadMessages.setData({ threadId: activeThreadId }, (prev) => [
+        ...(prev ?? []),
+        {
+          id: optimisticId,
+          threadId: activeThreadId,
+          role: "user" as const,
+          content: text,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    }
 
     try {
       const res = await mutateAsync({ prompt: text, threadId: activeThreadId ?? undefined });
       setThreadId(res.threadId);
+
+      if (activeThreadId && activeThreadId !== res.threadId) {
+        utils.agent.threadMessages.setData({ threadId: activeThreadId }, (prev) =>
+          (prev ?? []).filter((m) => m.id !== optimisticId),
+        );
+      }
+
+      setPendingUser(null);
       await utils.agent.threadMessages.invalidate({ threadId: res.threadId });
+      await utils.agent.threadMessages.refetch({ threadId: res.threadId });
       await utils.agent.listThreads.invalidate();
 
       if (res.rag.enabled) {
@@ -163,21 +238,36 @@ export function Chat() {
       }
     } catch (e) {
       if (isAbortError(e)) {
-        toast.message("Stopped");
-        await utils.agent.listThreads.invalidate();
-        const latest = await utils.agent.listThreads.fetch();
-        const id = activeThreadId ?? latest[0]?.id;
-        if (id) {
-          setThreadId(id);
-          await utils.agent.threadMessages.invalidate({ threadId: id });
+        if (activeThreadId) {
+          utils.agent.threadMessages.setData({ threadId: activeThreadId }, (prev) =>
+            (prev ?? []).filter((m) => m.id !== optimisticId),
+          );
         }
+        toast.message("Stopped");
+        await syncThreadMessages(activeThreadId);
+        setPendingUser(null);
         return;
       }
+
       console.error(e);
-      toast.error("Something went wrong");
+      const message = getErrorMessage(e);
+      setErrorMessage(message);
+      toast.error(message);
+
+      const syncedId = await syncThreadMessages(activeThreadId);
+      if (activeThreadId) {
+        utils.agent.threadMessages.setData({ threadId: activeThreadId }, (prev) =>
+          (prev ?? []).filter((m) => m.id !== optimisticId),
+        );
+      }
+      if (syncedId) {
+        setPendingUser(null);
+      } else {
+        setInput(text);
+        setPendingUser(null);
+      }
     } finally {
       agentAbort.set(null);
-      setPendingUser(null);
     }
   }
 
@@ -252,24 +342,13 @@ export function Chat() {
 
       {/* Transcript */}
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        {threadId ? (
-          <Transcript
-            threadId={threadId}
-            pendingUser={pendingUser}
-            isRunning={isRunning}
-            scrollRef={scrollRef}
-          />
-        ) : (
-          <>
-            {!pendingUser && (
-              <div className="rounded-2xl rounded-tl-sm bg-secondary px-4 py-3 text-sm text-foreground">
-                Hello. Ask me to summarize, draft, or rewrite — or anything about your inbox.
-              </div>
-            )}
-            {pendingUser && <Bubble role="user" content={pendingUser} />}
-            {isRunning && <ThinkingBubble />}
-          </>
-        )}
+        <Transcript
+          threadId={threadId}
+          pendingUser={pendingUser}
+          isBusy={isBusy}
+          errorMessage={errorMessage}
+          scrollRef={scrollRef}
+        />
       </div>
 
       {/* Quick actions */}
@@ -278,7 +357,7 @@ export function Chat() {
           <button
             key={label}
             type="button"
-            disabled={isRunning}
+            disabled={isBusy}
             onClick={() => send(prompt)}
             className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-secondary/50 px-2 py-3 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
           >
@@ -354,7 +433,7 @@ export function Chat() {
               }}
               placeholder="Ask Orion anything… (type @ to mention a contact)"
               rows={2}
-              disabled={isRunning}
+              disabled={isBusy}
               className="w-full resize-none bg-transparent px-2 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
             />
           </div>
@@ -381,7 +460,7 @@ export function Chat() {
 
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground">Orion 2.4 Ultra</span>
-              {isRunning ? (
+              {isBusy ? (
                 <Button
                   type="button"
                   size="icon-sm"

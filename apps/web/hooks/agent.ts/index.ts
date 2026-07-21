@@ -4,5 +4,8 @@ import { trpc } from "~/trpc/client";
 
 export const runAgent = () => pickMutationState(trpc.agent.runAgent.useMutation());
 export const agentThreads = () => pickQueryState(trpc.agent.listThreads.useQuery());
-export const agentThreadMessages = (input: RouterInputs["agent"]["threadMessages"]) =>
-  pickQueryState(trpc.agent.threadMessages.useQuery(input));
+export const agentThreadMessages = (
+  input: RouterInputs["agent"]["threadMessages"],
+  enabled = true,
+) =>
+  pickQueryState(trpc.agent.threadMessages.useQuery(input, { enabled }));
