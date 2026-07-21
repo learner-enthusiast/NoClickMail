@@ -2,9 +2,10 @@ import z from "zod";
 import { TRPCError } from "@trpc/server";
 import { agentProcedure, authenticatedProcedure, router } from "../../trpc";
 import { generatePath } from "../../utils/path-generator";
-import { chatService, CorsairAgent } from "../../services";
+import { chatService, CorsairAgent, ragService } from "../../services";
 import { zodUndefinedModel } from "../../schema";
 import { chatThreadModel, chatMessageModel } from "@repo/services/chat/model";
+import { ragRunMetaModel } from "@repo/services/rag/model";
 
 const TAGS = ["Agent"];
 const getPath = generatePath("/agent");
@@ -18,7 +19,13 @@ function assertNotAborted(signal: AbortSignal) {
 export const agentsRouter = router({
   runAgent: agentProcedure
     .input(z.object({ prompt: z.string().min(1), threadId: z.string().uuid().optional() }))
-    .output(z.object({ output: z.string(), threadId: z.string() }))
+    .output(
+      z.object({
+        output: z.string(),
+        threadId: z.string(),
+        rag: ragRunMetaModel,
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       assertNotAborted(ctx.signal);
 
@@ -26,7 +33,7 @@ export const agentsRouter = router({
         ? await chatService.getThreadForUser(ctx.user, input.threadId)
         : await chatService.createThread(ctx.user, input.prompt.slice(0, 60));
 
-      await chatService.appendMessage({
+      const userMsg = await chatService.appendMessage({
         userId: ctx.user,
         threadId: thread.id,
         role: "user",
@@ -35,11 +42,29 @@ export const agentsRouter = router({
 
       assertNotAborted(ctx.signal);
 
+      // RAG: ingest this message → retrieve top-k=3 → enhance prompt
+      const rag = await ragService.runForUserMessage(
+        {
+          userId: ctx.user,
+          threadId: thread.id,
+          messageId: userMsg.id,
+          prompt: input.prompt,
+        },
+        ctx.signal,
+      );
+
+      assertNotAborted(ctx.signal);
+
       const history = await chatService.buildContext(ctx.user, thread.id);
       let output: string;
       try {
         output =
-          (await new CorsairAgent(ctx.user).executePrompt(input.prompt, history, ctx.signal)) ?? "";
+          (await new CorsairAgent(ctx.user).executePrompt(
+            rag.enhancedPrompt,
+            history,
+            ctx.signal,
+            { enhancedPrompt: rag.enhancedPrompt, retrieved: rag.retrieved },
+          )) ?? "";
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
           throw new TRPCError({ code: "CLIENT_CLOSED_REQUEST", message: "Request aborted" });
@@ -56,7 +81,7 @@ export const agentsRouter = router({
         content: output,
       });
 
-      return { output, threadId: thread.id };
+      return { output, threadId: thread.id, rag: rag.meta };
     }),
   listThreads: authenticatedProcedure
     .input(zodUndefinedModel)

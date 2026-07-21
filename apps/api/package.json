@@ -7,7 +7,8 @@
     "dev": "dotenv -e ../../.env -- tsx watch ./src/index.ts",
     "build": "tsup",
     "lint": "eslint src/*",
-    "corsair:setup": "dotenv -e ../../.env -- tsx ./src/scripts/corsair-setup.ts"
+    "corsair:setup": "dotenv -e ../../.env -- tsx ./src/scripts/corsair-setup.ts",
+    "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:8000/api/inngest"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
@@ -39,6 +40,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
+    "inngest": "^4.13.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.16.3",
     "trpc-to-openapi": "^3.1.0",

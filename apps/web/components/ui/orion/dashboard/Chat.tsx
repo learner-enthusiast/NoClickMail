@@ -144,6 +144,23 @@ export function Chat() {
       setThreadId(res.threadId);
       await utils.agent.threadMessages.invalidate({ threadId: res.threadId });
       await utils.agent.listThreads.invalidate();
+
+      if (res.rag.enabled) {
+        const matches = res.rag.retrieve?.matchCount ?? 0;
+        if (res.rag.ingest?.queued) {
+          toast.message("RAG ingest queued", {
+            description: `Background indexing started · retrieved ${matches} prior match(es)`,
+          });
+        } else {
+          const chunks = res.rag.ingest?.chunkCount ?? 0;
+          toast.message("RAG complete", {
+            description: `Indexed ${chunks} chunk(s) · retrieved ${matches} match(es)`,
+          });
+        }
+        console.info("[RAG]", res.rag);
+      } else if (res.rag.skippedReason) {
+        console.warn("[RAG skipped]", res.rag.skippedReason);
+      }
     } catch (e) {
       if (isAbortError(e)) {
         toast.message("Stopped");

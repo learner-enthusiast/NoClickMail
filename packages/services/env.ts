@@ -14,8 +14,19 @@ const envSchema = z.object({
   CLIENT_URL: z.string().default("http://localhost:3000"),
   INTERNAL_URL: z.string().default("http://localhost:8000"),
   CORSAIR_CONNECT_REDIRECT_URI: z.string().url(),
-  // packages/services/env.ts — add to the schema
   OPENAI_API_KEY: z.string().min(1),
+  /** Pinecone — optional; RAG pipeline skips when unset */
+  PINECONE_API_KEY: z.string().min(1).optional(),
+  PINECONE_INDEX: z.string().min(1).optional(),
+  OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
+  /** Must match Pinecone index dimension (text-embedding-3-small default is 1536; set 1024 if index uses 1024) */
+  OPENAI_EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(1536),
+  RAG_CHUNK_SIZE: z.coerce.number().int().positive().default(600),
+  RAG_CHUNK_OVERLAP: z.coerce.number().int().nonnegative().default(80),
+  /** Inngest — set INNGEST_DEV=1 locally with `inngest dev`; cloud keys in production */
+  INNGEST_DEV: z.enum(["0", "1"]).optional(),
+  INNGEST_EVENT_KEY: z.string().min(1).optional(),
+  INNGEST_SIGNING_KEY: z.string().min(1).optional(),
 });
 
 function createEnv(env: NodeJS.ProcessEnv) {
