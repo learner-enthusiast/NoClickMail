@@ -2,6 +2,7 @@ import { OpenAIAgentsProvider } from "@corsair-dev/mcp";
 import { Agent, AgentInputItem, run, tool } from "@openai/agents";
 import { corsair } from "../corsair";
 import type { RetrievedChunkModelType } from "../rag/model";
+import { extractAgentTextDelta } from "./stream";
 
 type PriorTurn = { role: "user" | "assistant" | "system"; content: string };
 
@@ -126,5 +127,45 @@ You are judged on correctness, completion, and brevity — in that order.
 
     const result = await run(this.corsairAgent, agentInput);
     return result.finalOutput;
+  }
+
+  /** Stream assistant text deltas from the Corsair agent (summary step runs first, non-streamed). */
+  async *executePromptStream(
+    userPrompt: string,
+    history: PriorTurn[] = [],
+    signal?: AbortSignal,
+    rag?: AgentRagContext,
+  ): AsyncGenerator<string> {
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const effectivePrompt = rag?.enhancedPrompt ?? userPrompt;
+    const ragBlock = rag?.retrieved ? this.formatRagBlock(rag.retrieved) : "";
+
+    const input = [
+      ...history.map((m) => ({ role: m.role, content: m.content }) as AgentInputItem),
+      { role: "user" as const, content: effectivePrompt },
+    ];
+
+    const summary = await run(this.summaryAgent, JSON.stringify(input));
+
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const agentInput = [summary.finalOutput ?? "", ragBlock, `\nUser task:\n${effectivePrompt}`]
+      .filter(Boolean)
+      .join("\n");
+
+    const stream = await run(this.corsairAgent, agentInput, { stream: true, signal });
+
+    for await (const event of stream) {
+      if (signal?.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
+      const delta = extractAgentTextDelta(event);
+      if (delta) yield delta;
+    }
   }
 }

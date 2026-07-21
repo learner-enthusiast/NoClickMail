@@ -7,4 +7,6 @@ export type RouterInputs = inferRouterInputs<ServerRouter>;
 
 export type { ServerRouter } from "../server";
 
+export type { AgentStreamEventModelType } from "../server/routes/agent/model";
+
 export * from "@trpc/client";

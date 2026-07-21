@@ -24,6 +24,8 @@ import { createCalendarEvent } from "~/hooks/calendar";
 import { toast } from "sonner";
 import CalendarInviteDialog from "../../calendarinvite";
 import { ThinkingBubble } from "./ThinkingBubble";
+import type { AgentStreamEventModelType } from "@repo/trpc/client";
+import type { RagRunMetaModelType } from "@repo/services/rag/model";
 const QUICK_ACTIONS = [
   { label: "Summarize", icon: FileText, prompt: "Summarize the key risks in the selected report." },
   { label: "Draft", icon: PenLine, prompt: "Draft a concise response to the selected email." },
@@ -71,12 +73,14 @@ function Transcript({
   threadId,
   pendingUser,
   isBusy,
+  streamingAssistant,
   errorMessage,
   scrollRef,
 }: {
   threadId: string | null;
   pendingUser: string | null;
   isBusy: boolean;
+  streamingAssistant: string | null;
   errorMessage: string | null;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
@@ -90,7 +94,7 @@ function Transcript({
     requestAnimationFrame(() =>
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }),
     );
-  }, [messages, pendingUser, isBusy, errorMessage, scrollRef]);
+  }, [messages, pendingUser, isBusy, streamingAssistant, errorMessage, scrollRef]);
 
   const showInitialLoading =
     threadId !== null && isPending && !messages?.length && !showPendingUser && !isBusy;
@@ -109,7 +113,8 @@ function Transcript({
         <Bubble key={m.id} role={m.role} content={m.content} />
       ))}
       {showPendingUser && pendingUser && <Bubble role="user" content={pendingUser} />}
-      {isBusy && <ThinkingBubble />}
+      {isBusy && !streamingAssistant && <ThinkingBubble />}
+      {streamingAssistant && <Bubble role="assistant" content={streamingAssistant} />}
       {errorMessage && !isBusy && <ErrorBubble message={errorMessage} />}
     </>
   );
@@ -123,6 +128,7 @@ export function Chat() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [streamingAssistant, setStreamingAssistant] = useState<string | null>(null);
   const [input, setInput] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -178,6 +184,60 @@ export function Chat() {
     return "Something went wrong. Please try again.";
   }
 
+  function showRagToast(rag: RagRunMetaModelType) {
+    if (rag.enabled) {
+      const matches = rag.retrieve?.matchCount ?? 0;
+      if (rag.ingest?.queued) {
+        toast.message("RAG ingest queued", {
+          description: `Background indexing started · retrieved ${matches} prior match(es)`,
+        });
+      } else {
+        const chunks = rag.ingest?.chunkCount ?? 0;
+        toast.message("RAG complete", {
+          description: `Indexed ${chunks} chunk(s) · retrieved ${matches} match(es)`,
+        });
+      }
+      console.info("[RAG]", rag);
+    } else if (rag.skippedReason) {
+      console.warn("[RAG skipped]", rag.skippedReason);
+    }
+  }
+
+  async function consumeAgentStream(
+    stream: AsyncIterable<AgentStreamEventModelType>,
+    activeThreadId: string | null,
+    optimisticId: string,
+  ) {
+    let resolvedThreadId = activeThreadId;
+
+    for await (const event of stream) {
+      if (event.type === "meta") {
+        resolvedThreadId = event.threadId;
+        setThreadId(event.threadId);
+      } else if (event.type === "delta") {
+        setStreamingAssistant((prev) => (prev ?? "") + event.text);
+      } else if (event.type === "done") {
+        resolvedThreadId = event.threadId;
+        setThreadId(event.threadId);
+        showRagToast(event.rag);
+      }
+    }
+
+    if (activeThreadId && resolvedThreadId && activeThreadId !== resolvedThreadId) {
+      utils.agent.threadMessages.setData({ threadId: activeThreadId }, (prev) =>
+        (prev ?? []).filter((m) => m.id !== optimisticId),
+      );
+    }
+
+    if (resolvedThreadId) {
+      setPendingUser(null);
+      setStreamingAssistant(null);
+      await utils.agent.threadMessages.invalidate({ threadId: resolvedThreadId });
+      await utils.agent.threadMessages.refetch({ threadId: resolvedThreadId });
+      await utils.agent.listThreads.invalidate();
+    }
+  }
+
   async function send(prompt: string) {
     const text = prompt.trim();
     if (!text || isBusy) return;
@@ -187,6 +247,7 @@ export function Chat() {
 
     setInput("");
     setPendingUser(text);
+    setStreamingAssistant(null);
     setErrorMessage(null);
 
     const activeThreadId = threadId;
@@ -206,36 +267,8 @@ export function Chat() {
     }
 
     try {
-      const res = await mutateAsync({ prompt: text, threadId: activeThreadId ?? undefined });
-      setThreadId(res.threadId);
-
-      if (activeThreadId && activeThreadId !== res.threadId) {
-        utils.agent.threadMessages.setData({ threadId: activeThreadId }, (prev) =>
-          (prev ?? []).filter((m) => m.id !== optimisticId),
-        );
-      }
-
-      setPendingUser(null);
-      await utils.agent.threadMessages.invalidate({ threadId: res.threadId });
-      await utils.agent.threadMessages.refetch({ threadId: res.threadId });
-      await utils.agent.listThreads.invalidate();
-
-      if (res.rag.enabled) {
-        const matches = res.rag.retrieve?.matchCount ?? 0;
-        if (res.rag.ingest?.queued) {
-          toast.message("RAG ingest queued", {
-            description: `Background indexing started · retrieved ${matches} prior match(es)`,
-          });
-        } else {
-          const chunks = res.rag.ingest?.chunkCount ?? 0;
-          toast.message("RAG complete", {
-            description: `Indexed ${chunks} chunk(s) · retrieved ${matches} match(es)`,
-          });
-        }
-        console.info("[RAG]", res.rag);
-      } else if (res.rag.skippedReason) {
-        console.warn("[RAG skipped]", res.rag.skippedReason);
-      }
+      const stream = await mutateAsync({ prompt: text, threadId: activeThreadId ?? undefined });
+      await consumeAgentStream(stream, activeThreadId, optimisticId);
     } catch (e) {
       if (isAbortError(e)) {
         if (activeThreadId) {
@@ -244,6 +277,7 @@ export function Chat() {
           );
         }
         toast.message("Stopped");
+        setStreamingAssistant(null);
         await syncThreadMessages(activeThreadId);
         setPendingUser(null);
         return;
@@ -252,6 +286,7 @@ export function Chat() {
       console.error(e);
       const message = getErrorMessage(e);
       setErrorMessage(message);
+      setStreamingAssistant(null);
       toast.error(message);
 
       const syncedId = await syncThreadMessages(activeThreadId);
@@ -273,6 +308,7 @@ export function Chat() {
 
   function stopGeneration() {
     agentAbort.abort();
+    setStreamingAssistant(null);
     reset();
   }
 
@@ -346,6 +382,7 @@ export function Chat() {
           threadId={threadId}
           pendingUser={pendingUser}
           isBusy={isBusy}
+          streamingAssistant={streamingAssistant}
           errorMessage={errorMessage}
           scrollRef={scrollRef}
         />

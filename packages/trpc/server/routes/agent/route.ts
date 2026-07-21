@@ -5,7 +5,6 @@ import { generatePath } from "../../utils/path-generator";
 import { chatService, CorsairAgent, ragService } from "../../services";
 import { zodUndefinedModel } from "../../schema";
 import { chatThreadModel, chatMessageModel } from "@repo/services/chat/model";
-import { ragRunMetaModel } from "@repo/services/rag/model";
 
 const TAGS = ["Agent"];
 const getPath = generatePath("/agent");
@@ -19,14 +18,7 @@ function assertNotAborted(signal: AbortSignal) {
 export const agentsRouter = router({
   runAgent: agentProcedure
     .input(z.object({ prompt: z.string().min(1), threadId: z.string().uuid().optional() }))
-    .output(
-      z.object({
-        output: z.string(),
-        threadId: z.string(),
-        rag: ragRunMetaModel,
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async function* ({ ctx, input }) {
       assertNotAborted(ctx.signal);
 
       const thread = input.threadId
@@ -42,7 +34,6 @@ export const agentsRouter = router({
 
       assertNotAborted(ctx.signal);
 
-      // RAG: ingest this message → retrieve top-k=3 → enhance prompt
       const rag = await ragService.runForUserMessage(
         {
           userId: ctx.user,
@@ -55,16 +46,25 @@ export const agentsRouter = router({
 
       assertNotAborted(ctx.signal);
 
+      yield {
+        type: "meta" as const,
+        threadId: thread.id,
+        rag: rag.meta,
+      };
+
       const history = await chatService.buildContext(ctx.user, thread.id);
-      let output: string;
+      let output = "";
+
       try {
-        output =
-          (await new CorsairAgent(ctx.user).executePrompt(
-            rag.enhancedPrompt,
-            history,
-            ctx.signal,
-            { enhancedPrompt: rag.enhancedPrompt, retrieved: rag.retrieved },
-          )) ?? "";
+        for await (const delta of new CorsairAgent(ctx.user).executePromptStream(
+          rag.enhancedPrompt,
+          history,
+          ctx.signal,
+          { enhancedPrompt: rag.enhancedPrompt, retrieved: rag.retrieved },
+        )) {
+          output += delta;
+          yield { type: "delta" as const, text: delta };
+        }
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
           throw new TRPCError({ code: "CLIENT_CLOSED_REQUEST", message: "Request aborted" });
@@ -81,7 +81,12 @@ export const agentsRouter = router({
         content: output,
       });
 
-      return { output, threadId: thread.id, rag: rag.meta };
+      yield {
+        type: "done" as const,
+        threadId: thread.id,
+        output,
+        rag: rag.meta,
+      };
     }),
   listThreads: authenticatedProcedure
     .input(zodUndefinedModel)

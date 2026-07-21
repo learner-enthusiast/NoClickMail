@@ -16,6 +16,9 @@ export const tRPCContext = initTRPC
   .meta<OpenApiMeta>()
   .context<typeof createContext>()
   .create({
+    jsonl: {
+      pingMs: 15_000,
+    },
     errorFormatter({ shape, error }) {
       const isProd = env.NODE_ENV === "production";
 

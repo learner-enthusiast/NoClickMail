@@ -12,9 +12,14 @@ function AgentTester() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!prompt.trim()) return;
+    setOutput("");
     try {
-      const res = await mutateAsync({ prompt });
-      setOutput(res.output);
+      const stream = await mutateAsync({ prompt });
+      for await (const event of stream) {
+        if (event.type === "delta") {
+          setOutput((prev) => prev + event.text);
+        }
+      }
     } catch (err) {
       setOutput(err instanceof Error ? err.message : "Agent failed");
     }
