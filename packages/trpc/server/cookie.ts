@@ -57,6 +57,7 @@ export function createCookieFactory(res: Response) {
     value: string,
     opts: CookieOptions = defaultCookieOptions,
   ) {
+    if (res.headersSent) return;
     res.cookie(name, value, opts);
   };
 }
@@ -70,6 +71,7 @@ export function getCookieFactory(req: Request) {
 
 export function clearCookieFactory(res: Response) {
   return function deleteCookie(name: string, opts: CookieOptions = defaultCookieOptions) {
+    if (res.headersSent) return;
     const { maxAge: _maxAge, expires: _expires, ...rest } = opts;
     res.clearCookie(name, rest);
   };
