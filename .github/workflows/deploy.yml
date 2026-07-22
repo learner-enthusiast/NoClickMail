@@ -26,5 +26,6 @@ jobs:
             pnpm install
             pnpm db:migrate
             pnpm build
-            pm2 startOrReload ecosystem.config.cjs --update-env
+            pm2 delete api web course-web 2>/dev/null || true
+            pm2 start ecosystem.config.cjs --update-env
             pm2 save
