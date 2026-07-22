@@ -25,6 +25,8 @@ const envSchema = z.object({
   COURSE_RAG_COURSE_ID: z.string().min(1).default("udemy-course"),
   /** Override subtitle scan root (defaults to class_subtitle/class-subtitle under course-rag) */
   COURSE_RAG_SUBTITLE_ROOT: z.string().min(1).optional(),
+  /** Absolute path to packages/services/course-rag (optional; auto-detected from cwd) */
+  COURSE_RAG_DIR: z.string().min(1).optional(),
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
   /** Must match Pinecone index dimension (text-embedding-3-small default is 1536; set 1024 if index uses 1024) */
   OPENAI_EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(1536),

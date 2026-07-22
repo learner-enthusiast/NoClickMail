@@ -26,5 +26,5 @@ jobs:
             pnpm install
             pnpm db:migrate
             pnpm build
-            pm2 restart all
+            pm2 startOrReload ecosystem.config.cjs --update-env
             pm2 save

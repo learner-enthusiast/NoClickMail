@@ -1,10 +1,9 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { logger } from "@repo/logger";
 import { env } from "../env";
 import PineconeVectorStore from "../pinecone";
 import { parseTranscriptFile } from "./parse";
 import { ingestFromInput, ingestSubtitleDirectory } from "./ingest-worker";
+import { resolveCourseRagDir } from "./paths";
 import { rewriteUserPrompt } from "./prompt-rewriter";
 import { runCourseAsk } from "./ask-worker";
 import type {
@@ -19,8 +18,6 @@ import type {
   TranscriptSegmentModelType,
 } from "./model";
 
-const courseRagDir = path.dirname(fileURLToPath(import.meta.url));
-
 /**
  * Advanced RAG for Udemy course transcripts (VTT / SRT).
  */
@@ -31,7 +28,7 @@ class CourseRagService {
   });
 
   getCourseRagDir(): string {
-    return courseRagDir;
+    return resolveCourseRagDir();
   }
 
   /** Whether Pinecone course index is configured. */
@@ -68,7 +65,7 @@ class CourseRagService {
       courseId,
       vectors: this.vectors,
       subtitleRoot: opts?.subtitleRoot ?? env.COURSE_RAG_SUBTITLE_ROOT,
-      courseRagDir,
+      courseRagDir: resolveCourseRagDir(),
       force: opts?.force,
     });
   }
