@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+/** Override Pinecone connection — defaults to PINECONE_API_KEY / PINECONE_INDEX env vars. */
+export const pineconeConfigModel = z.object({
+  apiKey: z.string().min(1).optional(),
+  index: z.string().min(1).optional(),
+});
+
+export type PineconeConfigModelType = z.infer<typeof pineconeConfigModel>;
+
 export const vectorMetadataModel = z.object({
   userId: z.string(),
   threadId: z.string(),

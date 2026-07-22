@@ -10,6 +10,10 @@ function normalizeEnvUrl(value: string) {
     .replace(/^["']+|["']+$/g, "")
     .replace(/\/$/, "");
 }
+function parseCorsOrigins(value: string | undefined, fallback: string): string[] {
+  const raw = value ?? fallback;
+  return [...new Set(raw.split(",").map((o) => normalizeEnvUrl(o)).filter(Boolean))];
+}
 const envSchema = z.object({
   PORT: z.string().optional(),
   NODE_ENV: z.enum(["development", "production", "prod"]).default("development"),
@@ -34,6 +38,7 @@ function createEnv(env: NodeJS.ProcessEnv) {
     ...data,
     BASE_URL: normalizeEnvUrl(data.BASE_URL),
     CLIENT_URL: normalizeEnvUrl(data.CLIENT_URL),
+    CORS_ORIGINS: parseCorsOrigins(data.CORS_ORIGIN, data.CLIENT_URL),
     PUBLIC_OPENAPI_DOCS: data.PUBLIC_OPENAPI_DOCS ?? defaultPublicOpenApiDocs(data.NODE_ENV),
   };
 }
