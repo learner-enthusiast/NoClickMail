@@ -1,0 +1,273 @@
+# Deploy NoClickMail to a home server via GHCR + SSH (Cloudflare Access).
+#
+# Required GitHub repository secrets:
+#   SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, DEPLOY_PATH
+#   CF_SERVICE_TOKEN_ID, CF_SERVICE_TOKEN_SECRET
+#   GHCR_TOKEN                         (PAT with read:packages, for the home server to pull)
+#   DATABASE_URL                       (Postgres connection string)
+#   CLIENT_URL                         (public URL, e.g. https://orion.example.com)
+#   ACCESS_TOKEN_SECRET, REFRESH_TOKEN_SECRET
+#   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
+#   OPENAI_API_KEY
+#   CORSAIR_KEK
+#   CORSAIR_GMAIL_REDIRECT_URI, CORSAIR_CALENDAR_REDIRECT_URI
+#   CORSAIR_CONNECT_REDIRECT_URI         (e.g. https://orion.example.com/connect/callback)
+#   CORSAIR_WEBHOOK_BASE                 (public HTTPS API base, no trailing slash)
+#   CORSAIR_WEBHOOK_SECRET
+#
+# Optional secrets:
+#   DATABASE_URL_DIRECT                  (direct/session URL for migrations; defaults to DATABASE_URL)
+#   GOOGLE_OAUTH_REDIRECT_URI            (defaults to ${CLIENT_URL}/auth/google/callback)
+#   CORS_ORIGIN                          (defaults to CLIENT_URL)
+#   COOKIE_DOMAIN                        (e.g. .example.com for subdomains)
+#   PINECONE_API_KEY, PINECONE_INDEX
+#   INNGEST_EVENT_KEY, INNGEST_SIGNING_KEY
+#   GMAIL_PUBSUB_TOPIC_ID
+#   WEB_PORT                             (defaults to 8080 on the server)
+#   LOGGER_LEVEL
+#   PUBLIC_OPENAPI_DOCS                  (true/false, default false in production)
+#
+# One-time on the server: ensure Docker + Docker Compose plugin are installed.
+
+name: Home Server Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/noclickmail-api
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/noclickmail-web
+
+jobs:
+  build-and-push:
+    name: Build and push to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.api
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:latest
+            ${{ env.API_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=noclickmail-api
+          cache-to: type=gha,mode=max,scope=noclickmail-api
+
+      - name: Build and push Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.web
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=/trpc
+          tags: |
+            ${{ env.WEB_IMAGE }}:latest
+            ${{ env.WEB_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=noclickmail-web
+          cache-to: type=gha,mode=max,scope=noclickmail-web
+
+  deploy:
+    name: Deploy to home server
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      CF_SERVICE_TOKEN_ID: ${{ secrets.CF_SERVICE_TOKEN_ID }}
+      CF_SERVICE_TOKEN_SECRET: ${{ secrets.CF_SERVICE_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cloudflared
+        run: |
+          curl -L --fail \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb \
+            -o cloudflared.deb
+          sudo dpkg -i cloudflared.deb || sudo apt-get install -f -y
+
+      - name: Export Cloudflare service token for cloudflared
+        run: |
+          set -euo pipefail
+          {
+            echo "TUNNEL_SERVICE_TOKEN_ID<<EOF"
+            echo "$CF_SERVICE_TOKEN_ID"
+            echo "EOF"
+            echo "TUNNEL_SERVICE_TOKEN_SECRET<<EOF"
+            echo "$CF_SERVICE_TOKEN_SECRET"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          cat > ~/.ssh/config <<EOF
+          Host homeserver
+            HostName ${SSH_HOST}
+            User ${SSH_USER}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            ProxyCommand cloudflared access ssh --hostname %h
+            StrictHostKeyChecking accept-new
+            ConnectTimeout 30
+          EOF
+
+          chmod 600 ~/.ssh/config
+
+      - name: Create production env file
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+          CLIENT_URL: ${{ secrets.CLIENT_URL }}
+          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
+          REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REDIRECT_URI: ${{ secrets.GOOGLE_OAUTH_REDIRECT_URI }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CORSAIR_KEK: ${{ secrets.CORSAIR_KEK }}
+          CORSAIR_GMAIL_REDIRECT_URI: ${{ secrets.CORSAIR_GMAIL_REDIRECT_URI }}
+          CORSAIR_CALENDAR_REDIRECT_URI: ${{ secrets.CORSAIR_CALENDAR_REDIRECT_URI }}
+          CORSAIR_CONNECT_REDIRECT_URI: ${{ secrets.CORSAIR_CONNECT_REDIRECT_URI }}
+          CORSAIR_WEBHOOK_BASE: ${{ secrets.CORSAIR_WEBHOOK_BASE }}
+          CORSAIR_WEBHOOK_SECRET: ${{ secrets.CORSAIR_WEBHOOK_SECRET }}
+          CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
+          COOKIE_DOMAIN: ${{ secrets.COOKIE_DOMAIN }}
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          PINECONE_INDEX: ${{ secrets.PINECONE_INDEX }}
+          INNGEST_EVENT_KEY: ${{ secrets.INNGEST_EVENT_KEY }}
+          INNGEST_SIGNING_KEY: ${{ secrets.INNGEST_SIGNING_KEY }}
+          GMAIL_PUBSUB_TOPIC_ID: ${{ secrets.GMAIL_PUBSUB_TOPIC_ID }}
+          WEB_PORT: ${{ secrets.WEB_PORT }}
+          LOGGER_LEVEL: ${{ secrets.LOGGER_LEVEL }}
+          PUBLIC_OPENAPI_DOCS: ${{ secrets.PUBLIC_OPENAPI_DOCS }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          CLIENT="${CLIENT_URL%/}"
+          BASE="${CLIENT}"
+          GOOGLE_REDIRECT="${GOOGLE_OAUTH_REDIRECT_URI:-${CLIENT}/auth/google/callback}"
+          CORS="${CORS_ORIGIN:-${CLIENT}}"
+
+          {
+            printf 'GHCR_OWNER=%s\n' "${{ github.repository_owner }}"
+            printf 'PORT=8000\n'
+            printf 'NODE_ENV=production\n'
+            printf 'BASE_URL=%s\n' "$BASE"
+            printf 'INTERNAL_URL=%s\n' "$BASE"
+            printf 'CLIENT_URL=%s\n' "$CLIENT"
+            printf 'CORS_ORIGIN=%s\n' "$CORS"
+            printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
+            printf 'DATABASE_URL_DIRECT=%s\n' "${DATABASE_URL_DIRECT:-$DATABASE_URL}"
+            printf 'ACCESS_TOKEN_SECRET=%s\n' "$ACCESS_TOKEN_SECRET"
+            printf 'REFRESH_TOKEN_SECRET=%s\n' "$REFRESH_TOKEN_SECRET"
+            printf 'GOOGLE_OAUTH_CLIENT_ID=%s\n' "$GOOGLE_OAUTH_CLIENT_ID"
+            printf 'GOOGLE_OAUTH_CLIENT_SECRET=%s\n' "$GOOGLE_OAUTH_CLIENT_SECRET"
+            printf 'GOOGLE_OAUTH_REDIRECT_URI=%s\n' "$GOOGLE_REDIRECT"
+            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+            printf 'CORSAIR_KEK=%s\n' "$CORSAIR_KEK"
+            printf 'CORSAIR_GMAIL_REDIRECT_URI=%s\n' "$CORSAIR_GMAIL_REDIRECT_URI"
+            printf 'CORSAIR_CALENDAR_REDIRECT_URI=%s\n' "$CORSAIR_CALENDAR_REDIRECT_URI"
+            printf 'CORSAIR_CONNECT_REDIRECT_URI=%s\n' "$CORSAIR_CONNECT_REDIRECT_URI"
+            printf 'CORSAIR_WEBHOOK_BASE=%s\n' "${CORSAIR_WEBHOOK_BASE%/}"
+            printf 'CORSAIR_WEBHOOK_SECRET=%s\n' "$CORSAIR_WEBHOOK_SECRET"
+            printf 'COOKIE_DOMAIN=%s\n' "${COOKIE_DOMAIN:-}"
+            printf 'PINECONE_API_KEY=%s\n' "${PINECONE_API_KEY:-}"
+            printf 'PINECONE_INDEX=%s\n' "${PINECONE_INDEX:-}"
+            printf 'INNGEST_EVENT_KEY=%s\n' "${INNGEST_EVENT_KEY:-}"
+            printf 'INNGEST_SIGNING_KEY=%s\n' "${INNGEST_SIGNING_KEY:-}"
+            printf 'GMAIL_PUBSUB_TOPIC_ID=%s\n' "${GMAIL_PUBSUB_TOPIC_ID:-}"
+            printf 'LOGGER_LEVEL=%s\n' "${LOGGER_LEVEL:-info}"
+            printf 'PUBLIC_OPENAPI_DOCS=%s\n' "${PUBLIC_OPENAPI_DOCS:-false}"
+            printf 'NEXT_PUBLIC_API_URL=/trpc\n'
+            printf 'API_INTERNAL_URL=http://api:8000\n'
+            printf 'WEB_PORT=%s\n' "${WEB_PORT:-8080}"
+            printf 'API_IMAGE_TAG=%s\n' "${{ github.sha }}"
+            printf 'WEB_IMAGE_TAG=%s\n' "${{ github.sha }}"
+          } > .env.deploy
+          chmod 600 .env.deploy
+
+      - name: Upload compose file, nginx config, and env
+        run: |
+          ssh homeserver "mkdir -p '${DEPLOY_PATH}'"
+          scp docker-compose.deploy.yml "homeserver:${DEPLOY_PATH}/docker-compose.deploy.yml"
+          scp docker/nginx.deploy.conf "homeserver:${DEPLOY_PATH}/nginx.deploy.conf"
+          scp .env.deploy "homeserver:${DEPLOY_PATH}/.env"
+
+      - name: Pull images and restart containers
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USER: ${{ github.repository_owner }}
+        run: |
+          ssh homeserver \
+            "GHCR_TOKEN='${GHCR_TOKEN}' \
+             GHCR_USER='${GHCR_USER}' \
+             DEPLOY_PATH='${DEPLOY_PATH}' \
+             bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          cd "$DEPLOY_PATH"
+
+          docker compose -f docker-compose.deploy.yml --env-file .env pull
+          docker compose -f docker-compose.deploy.yml --env-file .env up -d --remove-orphans
+          docker image prune -f
+          REMOTE
+
+      - name: Health check
+        run: |
+          ssh homeserver \
+            "DEPLOY_PATH='${DEPLOY_PATH}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          # shellcheck disable=SC1091
+          source .env
+          set +a
+          PORT="${WEB_PORT:-8080}"
+
+          echo "=== Container status ==="
+          docker compose -f docker-compose.deploy.yml --env-file .env ps
+
+          echo "=== API logs (last 80 lines) ==="
+          docker compose -f docker-compose.deploy.yml --env-file .env logs api --tail 80 || true
+
+          curl -fsS -o /dev/null -w "Web HTTP %{http_code}\n" \
+            --retry 8 --retry-delay 5 --retry-all-errors \
+            "http://127.0.0.1:${PORT}/"
+
+          curl -fsS -o /dev/null -w "API HTTP %{http_code}\n" \
+            --retry 12 --retry-delay 5 --retry-all-errors \
+            "http://127.0.0.1:${PORT}/health"
+          REMOTE

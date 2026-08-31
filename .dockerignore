@@ -1,0 +1,14 @@
+node_modules
+.git
+.github
+.turbo
+**/.next
+**/dist
+.env
+.env.*
+!.env.example
+**/*.md
+**/coverage
+**/.DS_Store
+**/__MACOSX
+packages/services/course-rag/class_subtitle_lyst1784566935215

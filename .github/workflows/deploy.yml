@@ -1,8 +1,10 @@
-name: Deploy
+name: Deploy (PM2 — legacy)
+
+# Superseded by .github/workflows/homeserver-deploy.yml (Docker + GHCR).
+# Kept for manual rollback; does not run on push.
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:

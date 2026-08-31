@@ -1,3 +1,8 @@
 import path from "node:path";
-const nextConfig = { outputFileTracingRoot: path.join(import.meta.dirname, "../..") };
+
+const nextConfig = {
+  output: "standalone",
+  outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+};
+
 export default nextConfig;
