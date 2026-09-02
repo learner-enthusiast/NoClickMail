@@ -1,11 +1,21 @@
 import { z } from "zod";
+
+function normalizeEnvUrl(value: string) {
+  return value
+    .trim()
+    .replace(/^["']+|["']+$/g, "")
+    .replace(/\/$/, "");
+}
+
 const envSchema = z.object({
   GOOGLE_OAUTH_CLIENT_ID: z.string(),
   GOOGLE_OAUTH_CLIENT_SECRET: z.string(),
   GOOGLE_OAUTH_REDIRECT_URI: z.string().optional(),
   CORSAIR_KEK: z.string().min(32, "CORSAIR_KEK must be at least 32 chars"),
-  CORSAIR_GMAIL_REDIRECT_URI: z.string().url(),
-  CORSAIR_CALENDAR_REDIRECT_URI: z.string().url(),
+  /** User-facing redirect after Gmail connect — defaults to ${CLIENT_URL}/dashboard/inbox */
+  CORSAIR_GMAIL_REDIRECT_URI: z.string().url().optional(),
+  /** User-facing redirect after Calendar connect — defaults to ${CLIENT_URL}/dashboard/calendar */
+  CORSAIR_CALENDAR_REDIRECT_URI: z.string().url().optional(),
   NODE_ENV: z.enum(["development", "production", "prod"]).default("development"),
   ACCESS_TOKEN_SECRET: z.string().min(32, "ACCESS_TOKEN_SECRET must be at least 32 chars"),
   REFRESH_TOKEN_SECRET: z.string().min(32, "REFRESH_TOKEN_SECRET must be at least 32 chars"),
@@ -13,7 +23,8 @@ const envSchema = z.object({
   REFRESH_TOKEN_EXPIRY: z.string().default("30d"),
   CLIENT_URL: z.string().default("http://localhost:3000"),
   INTERNAL_URL: z.string().default("http://localhost:8000"),
-  CORSAIR_CONNECT_REDIRECT_URI: z.string().url(),
+  /** API OAuth callback — defaults to ${CLIENT_URL}/connect/callback (nginx proxies /connect to API) */
+  CORSAIR_CONNECT_REDIRECT_URI: z.string().url().optional(),
   OPENAI_API_KEY: z.string().min(1),
   /** Pinecone — optional; RAG pipeline skips when unset */
   PINECONE_API_KEY: z.string().min(1).optional(),
@@ -43,7 +54,18 @@ const envSchema = z.object({
 function createEnv(env: NodeJS.ProcessEnv) {
   const safeParseResult = envSchema.safeParse(env);
   if (!safeParseResult.success) throw new Error(safeParseResult.error.message);
-  return safeParseResult.data;
+  const data = safeParseResult.data;
+  const clientUrl = normalizeEnvUrl(data.CLIENT_URL);
+  return {
+    ...data,
+    CLIENT_URL: clientUrl,
+    CORSAIR_GMAIL_REDIRECT_URI:
+      data.CORSAIR_GMAIL_REDIRECT_URI ?? `${clientUrl}/dashboard/inbox`,
+    CORSAIR_CALENDAR_REDIRECT_URI:
+      data.CORSAIR_CALENDAR_REDIRECT_URI ?? `${clientUrl}/dashboard/calendar`,
+    CORSAIR_CONNECT_REDIRECT_URI:
+      data.CORSAIR_CONNECT_REDIRECT_URI ?? `${clientUrl}/connect/callback`,
+  };
 }
 
 export const env = createEnv(process.env);

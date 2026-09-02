@@ -1,9 +1,29 @@
 # Production stack for home-server deploy (see .github/workflows/homeserver-deploy.yml).
-# Nginx exposes a single port; API routes are reverse-proxied from the web origin.
+# App data lives in the local Postgres volume; db-sync pushes a daily backup to SYNC_DATABASE_URL.
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-noclickmail}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-noclickmail}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   api:
-    image: ghcr.io/${GHCR_OWNER}/noclickmail-api:${API_IMAGE_TAG:-latest}
+    image: noclickmail-api:${API_IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
     environment:
@@ -11,8 +31,13 @@ services:
       PORT: "8000"
       NODE_ENV: production
       INTERNAL_URL: http://api:8000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-noclickmail}
+      DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-noclickmail}
     expose:
       - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -27,7 +52,7 @@ services:
       start_period: 40s
 
   web:
-    image: ghcr.io/${GHCR_OWNER}/noclickmail-web:${WEB_IMAGE_TAG:-latest}
+    image: noclickmail-web:${WEB_IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
     environment:
@@ -41,6 +66,23 @@ services:
     expose:
       - "3000"
 
+  db-sync:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SYNC_DATABASE_URL: ${SYNC_DATABASE_URL}
+      SYNC_MAX_ATTEMPTS: ${SYNC_MAX_ATTEMPTS:-5}
+      SYNC_RETRY_DELAY_SECONDS: ${SYNC_RETRY_DELAY_SECONDS:-60}
+      SYNC_HOURLY_DELAY_SECONDS: ${SYNC_HOURLY_DELAY_SECONDS:-3600}
+      SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-86400}
+    volumes:
+      - ./db-sync-entrypoint.sh:/usr/local/bin/db-sync-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/db-sync-entrypoint.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   proxy:
     image: nginx:1.27-alpine
     restart: unless-stopped
@@ -51,3 +93,6 @@ services:
     depends_on:
       - api
       - web
+
+volumes:
+  pg_data:

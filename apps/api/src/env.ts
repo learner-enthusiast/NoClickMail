@@ -22,9 +22,10 @@ const envSchema = z.object({
   CLIENT_URL: z.string().default("http://localhost:3000"),
   OPENAPI_DOCS_SECRET: z.preprocess(emptyToUndefined, z.string().min(8).optional()),
   PUBLIC_OPENAPI_DOCS: z.enum(["true", "false"]).optional(),
-  CORSAIR_CONNECT_REDIRECT_URI: z.string().url(),
+  CORSAIR_CONNECT_REDIRECT_URI: z.string().url().optional(),
   GMAIL_PUBSUB_TOPIC_ID: z.string().optional(),
-  CORSAIR_WEBHOOK_BASE: z.string().url(),
+  /** Public HTTPS API base for webhooks — defaults to BASE_URL (same origin when nginx proxies /webhooks) */
+  CORSAIR_WEBHOOK_BASE: z.string().url().optional(),
   CORSAIR_WEBHOOK_SECRET: z.preprocess(emptyToUndefined, z.string().min(16)),
 });
 function defaultPublicOpenApiDocs(nodeEnv: string) {
@@ -34,12 +35,17 @@ function createEnv(env: NodeJS.ProcessEnv) {
   const safeParseResult = envSchema.safeParse(env);
   if (!safeParseResult.success) throw new Error(safeParseResult.error.message);
   const data = safeParseResult.data;
+  const baseUrl = normalizeEnvUrl(data.BASE_URL);
+  const clientUrl = normalizeEnvUrl(data.CLIENT_URL);
   return {
     ...data,
-    BASE_URL: normalizeEnvUrl(data.BASE_URL),
-    CLIENT_URL: normalizeEnvUrl(data.CLIENT_URL),
-    CORS_ORIGINS: parseCorsOrigins(data.CORS_ORIGIN, data.CLIENT_URL),
+    BASE_URL: baseUrl,
+    CLIENT_URL: clientUrl,
+    CORS_ORIGINS: parseCorsOrigins(data.CORS_ORIGIN, clientUrl),
     PUBLIC_OPENAPI_DOCS: data.PUBLIC_OPENAPI_DOCS ?? defaultPublicOpenApiDocs(data.NODE_ENV),
+    CORSAIR_CONNECT_REDIRECT_URI:
+      data.CORSAIR_CONNECT_REDIRECT_URI ?? `${clientUrl}/connect/callback`,
+    CORSAIR_WEBHOOK_BASE: data.CORSAIR_WEBHOOK_BASE ?? baseUrl,
   };
 }
 
