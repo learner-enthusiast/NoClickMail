@@ -10,7 +10,7 @@ Orion connects to your Google accounts, syncs mail and events in real time, and 
 
 ## Tech stack
 
-## Next.js 16, React 19, TypeScript, Tailwind CSS v4, tRPC v11, TanStack React Query, Express 5, PostgreSQL, Drizzle ORM, Corsair (Gmail + Calendar), OpenAI Agents, Google OAuth, SSE, pnpm,
+Next.js 16, React 19, TypeScript, Tailwind CSS v4, tRPC v11, TanStack React Query, Express 5, PostgreSQL, Drizzle ORM, Corsair (Gmail + Calendar), OpenAI, Pinecone (RAG), Inngest (background jobs), Google OAuth, SSE, Docker, pnpm, Turborepo.
 
 ## Monorepo structure
 
@@ -25,6 +25,72 @@ packages/
   database/     Drizzle schema, migrations, Postgres client
   logger/       Structured logging
 ```
+
+---
+
+## Architecture
+
+### Application overview
+
+```mermaid
+flowchart TB
+  subgraph browser [Browser]
+    Web[Next.js web]
+  end
+
+  subgraph api [Express API]
+    TRPC["/trpc — tRPC"]
+    Auth["/auth — Google sign-in"]
+    Connect["/connect — Corsair OAuth"]
+    WH["/webhooks — Gmail Pub/Sub"]
+    SSE["/events — SSE stream"]
+    Inngest["/api/inngest — Inngest"]
+  end
+
+  subgraph data [Data & AI]
+    PG[(PostgreSQL)]
+    Pinecone[(Pinecone RAG)]
+    OpenAI[OpenAI API]
+  end
+
+  subgraph external [External]
+    Google[Google OAuth / Gmail / Calendar]
+    InngestCloud[Inngest Cloud]
+  end
+
+  Web -->|tRPC + cookies| TRPC
+  Web -->|OAuth proxy| Auth
+  TRPC --> PG
+  Connect --> Google
+  WH --> Google
+  TRPC --> OpenAI
+  TRPC --> Pinecone
+  Inngest --> InngestCloud
+  Inngest --> Pinecone
+```
+
+| Layer | Responsibility |
+| ----- | -------------- |
+| **apps/web** | Dashboard UI, inbox, calendar, Orion Intelligence chat. Proxies Google OAuth callback so cookies land on the web origin in dev. |
+| **apps/api** | tRPC server, JWT auth, Corsair connect flow, Gmail/Calendar webhooks, SSE, Inngest handler, OpenAPI docs. |
+| **packages/trpc** | Routers, auth middleware, agent procedures. |
+| **packages/services** | Gmail, Calendar, Corsair, RAG ingest, OpenAI embeddings, user service. |
+| **packages/database** | Drizzle schema, migrations, Postgres client. |
+
+### Request flow (authenticated tRPC)
+
+1. Browser calls `NEXT_PUBLIC_API_URL` with `credentials: include` and CSRF header.
+2. API validates JWT from httpOnly cookie → builds tRPC context.
+3. Procedures read/write Postgres; agent path may trigger Inngest → Pinecone RAG ingest.
+4. Gmail/Calendar changes arrive via Pub/Sub webhook → SSE notifies connected clients.
+
+### Deployment modes
+
+| Mode | When | Doc section |
+| ---- | ---- | ----------- |
+| **Local dev** | Day-to-day development | [Quick start](#quick-start-local) |
+| **Split-host prod** | Web + API on separate subdomains (PM2) | [Split-host production](#split-host-production) |
+| **Home-server Docker** | Self-hosted via GitHub Actions + SSH | [Home-server deployment](#home-server-deployment) |
 
 ---
 
@@ -173,31 +239,58 @@ CORS_ORIGIN=https://orion.arnabsamanta.in
 NEXT_PUBLIC_API_URL=https://orionserver.arnabsamanta.in/trpc
 ```
 
-Cookies are set on the **API host**; the web app calls tRPC on the same API host with `credentials: include`. Subdomains of the same domain (e.g. `*.arnabsamanta.in`) are same-site and work with `SameSite=Strict`.
+**Home-server (single domain — nginx proxies API paths):**
+
+```
+CLIENT_URL=https://orion.example.com
+# GOOGLE_OAUTH_REDIRECT_URI defaults to https://orion.example.com/auth/google/callback
+# NEXT_PUBLIC_API_URL=/trpc (set at Docker build)
+```
+
+Cookies on home-server deploy use same-origin `/trpc`; set `COOKIE_DOMAIN` if you also serve other subdomains on the same parent domain.
 
 ---
 
-### OpenAI
+### OpenAI & RAG (Pinecone)
 
-| Variable         | Required | Description                                              |
-| ---------------- | -------- | -------------------------------------------------------- |
-| `OPENAI_API_KEY` | Yes      | Powers Orion Intelligence (summarize, draft, agent chat) |
+| Variable                      | Required (prod) | Description                                      |
+| ----------------------------- | --------------- | ------------------------------------------------ |
+| `OPENAI_API_KEY`              | Yes             | Orion Intelligence + embedding generation        |
+| `PINECONE_API_KEY`            | Yes             | Vector store for RAG                             |
+| `PINECONE_INDEX`              | Yes             | Pinecone index name                              |
+| `OPENAI_EMBEDDING_MODEL`      | No              | Default `text-embedding-3-small`                 |
+| `OPENAI_EMBEDDING_DIMENSIONS` | Yes             | Must match Pinecone index dimension (1024/1536)  |
+| `RAG_CHUNK_SIZE`              | No              | Default `600`                                    |
+| `RAG_CHUNK_OVERLAP`           | No              | Default `80`                                     |
+| `COURSE_PINECONE_API_KEY`     | No              | Optional second index for course-web             |
+| `COURSE_PINECONE_INDEX`       | No              | Optional course RAG index                        |
+
+---
+
+### Inngest (background jobs)
+
+| Variable              | Required (prod) | Description                                           |
+| --------------------- | --------------- | ----------------------------------------------------- |
+| `INNGEST_DEV`         | Local only      | Set `1` for local dev with `inngest dev`              |
+| `INNGEST_EVENT_KEY`   | Yes             | From [app.inngest.com](https://app.inngest.com)       |
+| `INNGEST_SIGNING_KEY` | Yes             | Verifies Inngest webhook calls to `/api/inngest`    |
+
+RAG ingest runs as Inngest functions triggered on user messages.
 
 ---
 
 ### Corsair — Gmail & Calendar
 
-| Variable                        | Required | Description                                                                    |
-| ------------------------------- | -------- | ------------------------------------------------------------------------------ |
-| `CORSAIR_KEK`                   | Yes      | Encryption key for stored tokens, min 32 chars — `openssl rand -base64 32`     |
-| `CORSAIR_CONNECT_REDIRECT_URI`  | Yes      | API OAuth callback for connect flow: `http://localhost:8000/connect/callback`  |
-| `CORSAIR_GMAIL_REDIRECT_URI`    | Yes      | User-facing redirect after Gmail connect (can match web URL)                   |
-| `CORSAIR_CALENDAR_REDIRECT_URI` | Yes      | User-facing redirect after Calendar connect                                    |
-| `CORSAIR_WEBHOOK_BASE`          | Yes      | Public **HTTPS** base for webhooks (ngrok in dev, API domain in prod)          |
-| `CORSAIR_WEBHOOK_SECRET`        | Yes      | Min 16 chars — appended as `?token=` on webhook URLs                           |
-| `GMAIL_PUBSUB_TOPIC_ID`         | Yes\*    | GCP Pub/Sub topic for Gmail push, e.g. `projects/my-project/topics/gmail-push` |
-
-\*Required for Gmail realtime sync via webhooks.
+| Variable                        | Required | Default (if unset)                          |
+| ------------------------------- | -------- | ------------------------------------------- |
+| `CORSAIR_KEK`                   | Yes      | —                                           |
+| `CORSAIR_WEBHOOK_SECRET`        | Yes      | Min 16 chars — Pub/Sub `?token=`            |
+| `GMAIL_PUBSUB_TOPIC_ID`         | Yes      | GCP topic for Gmail push                    |
+| `CORSAIR_CONNECT_REDIRECT_URI`  | No       | `${CLIENT_URL}/connect/callback`            |
+| `CORSAIR_GMAIL_REDIRECT_URI`    | No       | `${CLIENT_URL}/dashboard/inbox`             |
+| `CORSAIR_CALENDAR_REDIRECT_URI` | No       | `${CLIENT_URL}/dashboard/calendar`          |
+| `CORSAIR_WEBHOOK_BASE`          | No       | `BASE_URL` or `CLIENT_URL`                  |
+| `COOKIE_DOMAIN`                 | No       | e.g. `.example.com` for subdomain cookies   |
 
 ---
 
@@ -205,10 +298,13 @@ Cookies are set on the **API host**; the web app calls tRPC on the same API host
 
 | Variable              | Description                                      |
 | --------------------- | ------------------------------------------------ |
-| `LOGGER_LEVEL`        | `debug` \| `info` \| `warn` \| `error`           |
+| `LOGGER_LEVEL`        | `debug` \| `info` \| `error`                     |
 | `PUBLIC_OPENAPI_DOCS` | `true` to expose `/docs`                         |
 | `OPENAPI_DOCS_SECRET` | Protect `/docs` in production                    |
 | `SKIP_ENV_VALIDATION` | Set `true` for Docker/CI builds without full env |
+| `DATABASE_URL_DIRECT` | Direct Postgres URL for migrations / db sync   |
+
+See `.env.example` for local, split-host, and home-server examples.
 
 ---
 
@@ -227,11 +323,18 @@ Cookies are set on the **API host**; the web app calls tRPC on the same API host
    http://localhost:8000/connect/callback
    ```
 
-   **Production:**
+   **Split-host production:**
 
    ```
-   https://orionserver.arnabsamanta.in/auth/google/callback
-   https://orionserver.arnabsamanta.in/connect/callback
+   https://orionserver.example.com/auth/google/callback
+   https://orionserver.example.com/connect/callback
+   ```
+
+   **Home-server production (single domain via nginx):**
+
+   ```
+   https://orion.example.com/auth/google/callback
+   https://orion.example.com/connect/callback
    ```
 
 4. Copy **Client ID** and **Client secret** into `.env` as `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`
@@ -250,11 +353,19 @@ In **APIs & Services → Library**, enable:
 3. Set `GMAIL_PUBSUB_TOPIC_ID=projects/YOUR_PROJECT/topics/YOUR_TOPIC`
 4. Create a **Push subscription** with endpoint:
 
+   **Split-host:**
+
    ```
-   https://orionserver.arnabsamanta.in/webhooks/corsair?token=YOUR_CORSAIR_WEBHOOK_SECRET
+   https://orionserver.example.com/webhooks/corsair?token=YOUR_CORSAIR_WEBHOOK_SECRET
    ```
 
-   The URL must **exactly** match:
+   **Home-server (single domain):**
+
+   ```
+   https://orion.example.com/webhooks/corsair?token=YOUR_CORSAIR_WEBHOOK_SECRET
+   ```
+
+   Must match exactly:
 
    ```
    ${CORSAIR_WEBHOOK_BASE}/webhooks/corsair?token=${CORSAIR_WEBHOOK_SECRET}
@@ -305,27 +416,197 @@ Means `corsair:setup` was not run on this database. Run it and restart the API.
 
 ---
 
-## Production deployment
+## Split-host production
 
-Example split-host setup:
+Web and API on **separate subdomains** (legacy PM2 deploy on a VPS).
 
-| Role | Host                                  |
-| ---- | ------------------------------------- |
-| Web  | `https://orion.arnabsamanta.in`       |
-| API  | `https://orionserver.arnabsamanta.in` |
+| Role | Host                            |
+| ---- | ------------------------------- |
+| Web  | `https://orion.example.com`     |
+| API  | `https://orionserver.example.com` |
+
+```env
+CLIENT_URL=https://orion.example.com
+BASE_URL=https://orionserver.example.com
+CORS_ORIGIN=https://orion.example.com
+NEXT_PUBLIC_API_URL=https://orionserver.example.com/trpc
+GOOGLE_OAUTH_REDIRECT_URI=https://orionserver.example.com/auth/google/callback
+CORSAIR_CONNECT_REDIRECT_URI=https://orionserver.example.com/connect/callback
+CORSAIR_WEBHOOK_BASE=https://orionserver.example.com
+```
 
 ### Checklist
 
 - [ ] `pnpm db:migrate` on production DB (use direct URL for migrate)
 - [ ] `pnpm --filter @repo/api corsair:setup` on production DB
-- [ ] API env: `NODE_ENV=prod`, `CLIENT_URL`, `CORS_ORIGIN`, `CORSAIR_WEBHOOK_*`
-- [ ] Web env: `NEXT_PUBLIC_API_URL=https://orionserver.../trpc` → **rebuild web**
-- [ ] Google Console redirect URIs updated for production API host
-- [ ] Pub/Sub push subscription points to production webhook URL
-- [ ] nginx forwards `Authorization` header for Pub/Sub: `proxy_set_header Authorization $http_authorization;`
-- [ ] PM2 / process manager restarts after env changes
+- [ ] Web rebuilt after changing `NEXT_PUBLIC_API_URL`
+- [ ] Google Console redirect URIs on API host
+- [ ] Pub/Sub push subscription on API webhook URL
+- [ ] nginx forwards `Authorization` for Pub/Sub JWT verification
 
-Deploy workflow (`.github/workflows/deploy.yml`): `git pull` → `pnpm install` → `pnpm db:migrate` → `pnpm build` → `pm2 restart all`
+Manual deploy: `.github/workflows/deploy.yml` (workflow_dispatch) — `git pull` → `pnpm install` → `pnpm db:migrate` → `pnpm build` → `pm2 restart`.
+
+---
+
+## Home-server deployment
+
+Self-hosted Docker stack on a home server. GitHub Actions builds images, transfers them over SSH (Cloudflare Access), and runs `docker compose`.
+
+**Workflow:** `.github/workflows/homeserver-deploy.yml`
+
+### Home-server architecture
+
+```mermaid
+flowchart TB
+  subgraph ci [GitHub Actions]
+    Build[Build API + Web images]
+    Save[docker save → tar.gz]
+    SCP[SCP via cloudflared SSH]
+  end
+
+  subgraph tunnel [Cloudflare]
+    CF[Cloudflare Tunnel]
+  end
+
+  subgraph server [Home server Docker]
+    Proxy[nginx :8080]
+    Web[web — Next.js :3000]
+    API[api — Express :8000]
+    PG[(postgres — pg_data volume)]
+    Sync[db-sync — daily backup]
+  end
+
+  subgraph remote [Remote cloud]
+    Neon[(Neon Postgres backup)]
+    Pinecone[(Pinecone)]
+    Inngest[Inngest Cloud]
+    Google[Google APIs]
+  end
+
+  Build --> Save --> SCP
+  SCP --> server
+  CF -->|HTTPS| Proxy
+  Proxy -->|"/"| Web
+  Proxy -->|"/trpc /auth /connect /webhooks"| API
+  Web -->|API_INTERNAL_URL| API
+  API --> PG
+  API --> Pinecone
+  API --> Inngest
+  API --> Google
+  Sync -->|pg_dump daily| Neon
+  PG --> Sync
+```
+
+### Docker Compose services
+
+| Service    | Image / role | Notes |
+| ---------- | ------------ | ----- |
+| `postgres` | postgres:15  | Primary database; data in `pg_data` volume |
+| `api`      | noclickmail-api | Runs migrations on start; tRPC, webhooks, Inngest |
+| `web`      | noclickmail-web | Next.js standalone; `NEXT_PUBLIC_API_URL=/trpc` |
+| `proxy`    | nginx        | Single public port (`WEB_PORT`, default 8080) |
+| `db-sync`  | postgres:15  | Daily `pg_dump` → remote `SYNC_DATABASE_URL` (Neon) |
+
+Nginx routes (all on `CLIENT_URL`):
+
+| Path | Backend |
+| ---- | ------- |
+| `/` | Next.js web |
+| `/trpc`, `/auth`, `/connect`, `/webhooks`, `/events`, `/api`, `/docs` | Express API |
+
+### Deploy flow
+
+1. Push to `main` (or manual workflow dispatch)
+2. CI builds `noclickmail-api` and `noclickmail-web` Docker images
+3. Images exported as `noclickmail-images.tar.gz`
+4. SCP tarball + `docker-compose.deploy.yml` + `nginx.deploy.conf` + `.env` to server
+5. Server: `docker load` → `docker compose up -d`
+6. Health check: `GET /` and `GET /health` on localhost:`WEB_PORT`
+
+### Database strategy
+
+- **Runtime:** app uses **local Postgres** in Docker (`postgresql://postgres:PASS@postgres:5432/noclickmail`)
+- **Backup:** `db-sync` pushes a full dump to **remote Neon** (`DATABASE_URL` GitHub secret) every 24h
+- **Retry:** 5 attempts per batch, 1h wait between batches until success
+
+Point Cloudflare Tunnel at `http://127.0.0.1:8080` (or your `WEB_PORT`).
+
+### Home-server env model
+
+Secrets live in **GitHub repository secrets**. The workflow generates `.env` on the server — you do not edit `.env` manually on deploy.
+
+| GitHub secret | Role |
+| ------------- | ---- |
+| `CLIENT_URL` | Public URL (e.g. `https://orion.example.com`) — also `BASE_URL` |
+| `DATABASE_URL` | Remote Neon URL for daily sync |
+| `POSTGRES_PASSWORD` | Local Postgres password (keep stable) |
+| `PINECONE_*`, `INNGEST_*`, `OPENAI_*` | RAG pipeline |
+| `CORSAIR_*`, `GMAIL_PUBSUB_TOPIC_ID` | Gmail/Calendar |
+| Corsair redirect URIs | **Optional** — default from `CLIENT_URL` |
+
+Full secret list is documented in the workflow header (`.github/workflows/homeserver-deploy.yml`).
+
+### One-time server setup
+
+```bash
+# Install Docker + Compose plugin, then:
+mkdir -p /opt/noclickmail
+```
+
+**Corsair setup (once per fresh database):** the production API image does not include the setup script. From your dev machine, SSH-tunnel to the home server's Postgres and run:
+
+```bash
+# Terminal 1 — tunnel local 5433 → server postgres:5432
+ssh -L 5433:127.0.0.1:5432 user@homeserver
+
+# Terminal 2 — from repo root, point at tunneled DB
+DATABASE_URL=postgresql://postgres:YOUR_POSTGRES_PASSWORD@localhost:5433/noclickmail \
+  pnpm --filter @repo/api corsair:setup
+```
+
+Use the same `CORSAIR_KEK` and Google OAuth values as in GitHub secrets.
+
+### Home-server Google Console
+
+Single domain — register on `CLIENT_URL`:
+
+```
+https://orion.example.com/auth/google/callback
+https://orion.example.com/connect/callback
+```
+
+Webhook:
+
+```
+https://orion.example.com/webhooks/corsair?token=YOUR_SECRET
+```
+
+### Useful commands on the server
+
+```bash
+cd /opt/noclickmail
+
+# Status
+docker compose -f docker-compose.deploy.yml ps
+
+# Logs
+docker compose -f docker-compose.deploy.yml logs -f api
+docker compose -f docker-compose.deploy.yml logs -f db-sync
+
+# Restart after manual .env edit (normally CI overwrites .env)
+docker compose -f docker-compose.deploy.yml --env-file .env up -d
+```
+
+### Docker files reference
+
+| File | Purpose |
+| ---- | ------- |
+| `docker/Dockerfile.api` | Express API (tsup bundle + migrate on start) |
+| `docker/Dockerfile.web` | Next.js standalone |
+| `docker-compose.deploy.yml` | Production stack |
+| `docker/nginx.deploy.conf` | Reverse proxy rules |
+| `docker/db-sync-entrypoint.sh` | Daily Neon backup + retry logic |
+| `docker/migrate.mjs` | Drizzle migrations at API startup |
 
 ---
 
@@ -343,12 +624,12 @@ Deploy workflow (`.github/workflows/deploy.yml`): `git pull` → `pnpm install` 
 
 ---
 
-## Architecture notes
+## Runtime notes
 
-- **Auth:** JWT in httpOnly cookies on API host; CSRF token for tRPC mutations
-- **Realtime:** SSE at `/events/stream` — Gmail/Calendar webhooks notify connected clients
-- **AI:** `agent.runAgent` tRPC mutation → OpenAI via `@openai/agents`
-- **Rate limiting:** Express limiters on `/auth`, `/connect`, `/trpc`; tRPC limits on auth + agent procedures
+- **Auth:** JWT in httpOnly cookies; CSRF token for tRPC mutations. Home-server: same-origin `/trpc` via nginx.
+- **Realtime:** SSE at `/events/stream` — webhooks notify connected clients.
+- **AI / RAG:** Agent messages → Inngest → chunk + embed → Pinecone upsert.
+- **Rate limiting:** Express limiters on `/auth`, `/connect`, `/trpc`.
 
 ---
 
@@ -356,11 +637,13 @@ Deploy workflow (`.github/workflows/deploy.yml`): `git pull` → `pnpm install` 
 
 | Issue                            | Fix                                                                                                                                          |
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth.me` 401 after Google login | Align `GOOGLE_OAUTH_REDIRECT_URI` (API host), `CORS_ORIGIN`, `CLIENT_URL`, `NEXT_PUBLIC_API_URL`; see [Google OAuth](#google-oauth--sign-in) |
-| `Integration "gmail" not found`  | Run `pnpm --filter @repo/api corsair:setup`                                                                                                  |
-| Webhook 401                      | `CORSAIR_WEBHOOK_BASE` + `?token=` must match Pub/Sub subscription URL exactly; check nginx passes `Authorization`                           |
-| SSL DB errors (Neon)             | Use SSL connection string; see `packages/database/pg.ts`                                                                                     |
-| `NEXT_PUBLIC_*` not updating     | Rebuild web app after env change                                                                                                             |
+| `auth.me` 401 after Google login | Align `GOOGLE_OAUTH_REDIRECT_URI`, `CORS_ORIGIN`, `CLIENT_URL`, `NEXT_PUBLIC_API_URL`                                                          |
+| `Integration "gmail" not found`  | Run `pnpm --filter @repo/api corsair:setup` on the active database                                                                           |
+| Webhook 401                      | `CORSAIR_WEBHOOK_BASE` + `?token=` must match Pub/Sub URL; nginx must pass `Authorization`                                                   |
+| SSL DB errors (Neon)             | Use `sslmode=require` in connection string                                                                                                   |
+| `NEXT_PUBLIC_*` not updating     | Rebuild web image / `pnpm build` after env change                                                                                            |
+| Home-server db-sync fails        | Use Neon **direct** URL in `DATABASE_URL_DIRECT`; pooler URLs fail `pg_restore`                                                            |
+| RAG not ingesting                | Verify `PINECONE_*`, `INNGEST_*`, `OPENAI_EMBEDDING_DIMENSIONS` match index; check `docker compose logs api`                                 |
 
 ---
 
