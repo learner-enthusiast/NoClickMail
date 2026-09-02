@@ -27,6 +27,9 @@
 #     CORSAIR_WEBHOOK_SECRET
 #     GMAIL_PUBSUB_TOPIC_ID
 #
+#   Docker
+#     EXTERNAL_PORT                      (host port nginx is published on, e.g. 8080)
+#
 # Optional secrets (recommended — have sensible defaults):
 #   DATABASE_URL_DIRECT                  (remote direct URL for sync; defaults to DATABASE_URL)
 #   POSTGRES_USER                        (defaults to postgres)
@@ -46,7 +49,6 @@
 #   COURSE_PINECONE_API_KEY              (course RAG — optional)
 #   COURSE_PINECONE_INDEX                (course RAG — optional)
 #   COURSE_RAG_COURSE_ID                 (defaults to udemy-course)
-#   WEB_PORT                             (defaults to 8080 on the server)
 #   LOGGER_LEVEL                         (defaults to info)
 #   PUBLIC_OPENAPI_DOCS                  (defaults to false)
 #
@@ -190,7 +192,7 @@ jobs:
           GMAIL_PUBSUB_TOPIC_ID: ${{ secrets.GMAIL_PUBSUB_TOPIC_ID }}
           CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
           COOKIE_DOMAIN: ${{ secrets.COOKIE_DOMAIN }}
-          WEB_PORT: ${{ secrets.WEB_PORT }}
+          EXTERNAL_PORT: ${{ secrets.EXTERNAL_PORT }}
           LOGGER_LEVEL: ${{ secrets.LOGGER_LEVEL }}
           PUBLIC_OPENAPI_DOCS: ${{ secrets.PUBLIC_OPENAPI_DOCS }}
         run: |
@@ -241,6 +243,7 @@ jobs:
           require_secret CORSAIR_WEBHOOK_SECRET "${CORSAIR_WEBHOOK_SECRET:-}"
           require_secret GMAIL_PUBSUB_TOPIC_ID "${GMAIL_PUBSUB_TOPIC_ID:-}"
           require_secret SYNC_DATABASE_URL "${REMOTE_SYNC:-}"
+          require_secret EXTERNAL_PORT "${EXTERNAL_PORT:-}"
 
           EMBEDDING_DIMENSIONS="${OPENAI_EMBEDDING_DIMENSIONS}"
 
@@ -288,7 +291,7 @@ jobs:
             printf 'PUBLIC_OPENAPI_DOCS=%s\n' "${PUBLIC_OPENAPI_DOCS:-false}"
             printf 'NEXT_PUBLIC_API_URL=/trpc\n'
             printf 'API_INTERNAL_URL=http://api:8000\n'
-            printf 'WEB_PORT=%s\n' "${WEB_PORT:-8080}"
+            printf 'EXTERNAL_PORT=%s\n' "$EXTERNAL_PORT"
             printf 'API_IMAGE_TAG=%s\n' "${{ github.sha }}"
             printf 'WEB_IMAGE_TAG=%s\n' "${{ github.sha }}"
           } > .env.deploy
@@ -336,7 +339,7 @@ jobs:
           # shellcheck disable=SC1091
           source .env
           set +a
-          PORT="${WEB_PORT:-8080}"
+          PORT="${EXTERNAL_PORT:-8080}"
 
           echo "=== Container status ==="
           docker compose -f docker-compose.deploy.yml --env-file .env ps

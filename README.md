@@ -504,7 +504,7 @@ flowchart TB
 | `postgres` | postgres:15  | Primary database; data in `pg_data` volume |
 | `api`      | noclickmail-api | Runs migrations on start; tRPC, webhooks, Inngest |
 | `web`      | noclickmail-web | Next.js standalone; `NEXT_PUBLIC_API_URL=/trpc` |
-| `proxy`    | nginx        | Single public port (`WEB_PORT`, default 8080) |
+| `proxy`    | nginx        | Single public port (`EXTERNAL_PORT` — host → container `:80`) |
 | `db-sync`  | postgres:15  | Daily `pg_dump` → remote `SYNC_DATABASE_URL` (Neon) |
 
 Nginx routes (all on `CLIENT_URL`):
@@ -521,7 +521,7 @@ Nginx routes (all on `CLIENT_URL`):
 3. Images exported as `noclickmail-images.tar.gz`
 4. SCP tarball + `docker-compose.deploy.yml` + `nginx.deploy.conf` + `.env` to server
 5. Server: `docker load` → `docker compose up -d`
-6. Health check: `GET /` and `GET /health` on localhost:`WEB_PORT`
+6. Health check: `GET /` and `GET /health` on localhost:`EXTERNAL_PORT`
 
 ### Database strategy
 
@@ -529,7 +529,7 @@ Nginx routes (all on `CLIENT_URL`):
 - **Backup:** `db-sync` pushes a full dump to **remote Neon** (`DATABASE_URL` GitHub secret) every 24h
 - **Retry:** 5 attempts per batch, 1h wait between batches until success
 
-Point Cloudflare Tunnel at `http://127.0.0.1:8080` (or your `WEB_PORT`).
+Point Cloudflare Tunnel at `http://127.0.0.1:EXTERNAL_PORT` (set via GitHub secret).
 
 ### Home-server env model
 
@@ -542,7 +542,7 @@ Secrets live in **GitHub repository secrets**. The workflow generates `.env` on 
 | `POSTGRES_PASSWORD` | Local Postgres password (keep stable) |
 | `PINECONE_*`, `INNGEST_*`, `OPENAI_*` | RAG pipeline |
 | `CORSAIR_*`, `GMAIL_PUBSUB_TOPIC_ID` | Gmail/Calendar |
-| Corsair redirect URIs | **Optional** — default from `CLIENT_URL` |
+| `EXTERNAL_PORT` | Host port Docker binds (e.g. `8080`) — tunnel targets `http://127.0.0.1:EXTERNAL_PORT` |
 
 Full secret list is documented in the workflow header (`.github/workflows/homeserver-deploy.yml`).
 
