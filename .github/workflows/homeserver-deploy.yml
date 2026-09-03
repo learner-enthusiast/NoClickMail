@@ -84,12 +84,26 @@ jobs:
           cache-from: type=gha,scope=noclickmail-api
           cache-to: type=gha,mode=max,scope=noclickmail-api
 
-      - name: Verify migrate script in API image
+      - name: Verify API image runtime dependencies
         run: |
           set -euo pipefail
-          echo "=== Checking migrate script exists in API image ==="
+          echo "=== Migrate script ==="
           docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/migrate.mjs
           docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/pg /app/apps/api/node_modules/drizzle-orm
+
+          echo "=== External runtime deps (tsup leaves these in node_modules) ==="
+          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/@corsair-dev/mcp
+          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/@openai/agents
+          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/corsair
+
+          echo "=== Require check (must not MODULE_NOT_FOUND) ==="
+          docker run --rm "${{ env.API_IMAGE }}" node -e "
+            require('@corsair-dev/mcp');
+            require('@openai/agents');
+            require('corsair');
+            console.log('runtime deps OK');
+          "
+
           echo "=== Dry-run migrate (expect DATABASE_URL error, not module-not-found) ==="
           docker run --rm "${{ env.API_IMAGE }}" node /app/apps/api/migrate.mjs 2>&1 | head -20 || true
 

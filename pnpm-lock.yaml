@@ -30,6 +30,12 @@ importers:
       '@corsair-dev/googlecalendar':
         specifier: ^0.1.4
         version: 0.1.5(corsair@0.1.76)(zod@4.4.3)
+      '@corsair-dev/mcp':
+        specifier: ^0.1.22
+        version: 0.1.22(@openai/agents@0.11.6(ws@8.21.0)(zod@4.4.3))(openai@6.43.0(ws@8.21.0)(zod@4.4.3))
+      '@openai/agents':
+        specifier: ^0.11.6
+        version: 0.11.6(ws@8.21.0)(zod@4.4.3)
       '@repo/database':
         specifier: workspace:*
         version: link:../../packages/database
