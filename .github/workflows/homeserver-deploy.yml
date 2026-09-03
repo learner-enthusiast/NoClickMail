@@ -97,7 +97,7 @@ jobs:
           docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/corsair
 
           echo "=== Require check (must not MODULE_NOT_FOUND) ==="
-          docker run --rm "${{ env.API_IMAGE }}" node -e "
+          docker run --rm -w /app/apps/api "${{ env.API_IMAGE }}" node -e "
             require('@corsair-dev/mcp');
             require('@openai/agents');
             require('corsair');
