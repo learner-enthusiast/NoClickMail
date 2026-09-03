@@ -2,9 +2,7 @@ import db, { and, asc, desc, eq } from "@repo/database";
 import { chatMessages, chatThreads } from "@repo/database/schema";
 import { notFound } from "../error";
 
-// ── Tunables for "careful" context ──
-const MAX_CONTEXT_MESSAGES = 20; // hard cap on turns sent to the model
-const MAX_CONTEXT_CHARS = 12_000; // ~3–4k tokens budget for history
+// ── Tunables for message storage ──
 const MAX_MESSAGE_CHARS = 4_000; // truncate any single huge message
 
 function estimateTokens(text: string): number {
@@ -71,33 +69,6 @@ class ChatService {
       .where(and(eq(chatThreads.id, input.threadId), eq(chatThreads.userId, input.userId)));
 
     return msg!;
-  }
-
-  /**
-   * Build a SAFE, BOUNDED context window for the model.
-   * - tenant-isolated (userId + threadId)
-   * - newest-first walk, stop at message/char caps
-   * - returns chronological order for the model
-   */
-  async buildContext(userId: string, threadId: string) {
-    const rows = await db
-      .select()
-      .from(chatMessages)
-      .where(and(eq(chatMessages.threadId, threadId), eq(chatMessages.userId, userId)))
-      .orderBy(desc(chatMessages.createdAt))
-      .limit(MAX_CONTEXT_MESSAGES);
-
-    const picked: typeof rows = [];
-    let charBudget = MAX_CONTEXT_CHARS;
-
-    for (const row of rows) {
-      const len = row.content.length;
-      if (len > charBudget) break; // stop once we'd blow the budget
-      charBudget -= len;
-      picked.push(row);
-    }
-
-    return picked.reverse().map((m) => ({ role: m.role, content: m.content }));
   }
 }
 

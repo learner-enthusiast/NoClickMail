@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+/** Pinecone vector record schemas — used by rag/pinecone/index.ts. */
+
 /** Override Pinecone connection — defaults to PINECONE_API_KEY / PINECONE_INDEX env vars. */
 export const pineconeConfigModel = z.object({
   apiKey: z.string().min(1).optional(),

@@ -1,7 +1,17 @@
 const DEFAULT_MAX_CHARS = 600;
 const DEFAULT_OVERLAP = 80;
 
-/** Split text into overlapping chunks for embedding / indexing. */
+/**
+ * Split text into overlapping chunks for embedding / Pinecone indexing.
+ *
+ * Strategy:
+ *   1. Split on double newlines (paragraph boundaries) when possible
+ *   2. Fall back to fixed-size sliding windows with overlap for long paragraphs
+ *
+ * Overlap preserves context at chunk boundaries so a sentence split across
+ * two chunks is still retrievable from either side. Sizes are configurable
+ * via RAG_CHUNK_SIZE and RAG_CHUNK_OVERLAP env vars (defaults: 600 / 80).
+ */
 export function chunkText(
   text: string,
   opts?: { maxChars?: number; overlap?: number },
@@ -25,6 +35,7 @@ export function chunkText(
   return paragraphs;
 }
 
+/** Fixed-size sliding window with overlap — used for long single paragraphs. */
 function splitBySize(text: string, maxChars: number, overlap: number): string[] {
   const chunks: string[] = [];
   let start = 0;

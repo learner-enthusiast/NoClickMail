@@ -10,7 +10,16 @@ import type {
 export type { PineconeConfigModelType } from "./model";
 
 /**
- * Pinecone vector store — one namespace per user for isolation.
+ * Pinecone vector store for RAG memory.
+ *
+ * Tenant isolation: each user gets their own Pinecone namespace (keyed by
+ * userId). All upserts and queries are scoped to that namespace so users
+ * never see each other's embedded messages.
+ *
+ * Record shape:
+ *   id       — `{messageId}:{chunkIndex}`
+ *   values   — embedding vector (OPENAI_EMBEDDING_DIMENSIONS dims)
+ *   metadata — userId, threadId, messageId, role, chunkIndex, text, createdAt
  */
 class PineconeVectorStore {
   private client: Pinecone | null = null;
@@ -26,7 +35,6 @@ class PineconeVectorStore {
     return Boolean(this.apiKey && this.indexName);
   }
 
-  /** Resolved index name (after env fallback). */
   getIndexName(): string | undefined {
     return this.indexName;
   }
@@ -45,6 +53,7 @@ class PineconeVectorStore {
     return this.getClient().index(this.indexName!);
   }
 
+  /** Batch upsert embedded chunks into the user's namespace. */
   async upsertMany(userId: string, records: UpsertVectorInputModelType[]): Promise<number> {
     if (records.length === 0) return 0;
 
@@ -59,6 +68,10 @@ class PineconeVectorStore {
     return records.length;
   }
 
+  /**
+   * Cosine similarity search — returns top-k chunks ranked by score.
+   * Only matches with valid text metadata are returned (filters malformed records).
+   */
   async query(input: QueryVectorsInputModelType): Promise<VectorMatchModelType[]> {
     const namespace = this.index().namespace(input.userId);
     const result = await namespace.query({

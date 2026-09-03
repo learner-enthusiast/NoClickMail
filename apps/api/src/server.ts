@@ -15,8 +15,6 @@ import { corsairAuthRouter } from "./routes.ts/corsair-auth";
 import { webhookRouter } from "./routes.ts/webhooks";
 import { eventsRouter } from "./routes.ts/events";
 import { apiLimiter } from "./middleware/rate-limit";
-import { serve } from "inngest/express";
-import { inngest, inngestFunctions } from "@repo/services/inngest";
 
 export const app = express();
 const openApiDocument = generateOpenApiDocument(serverRouter, {
@@ -93,13 +91,6 @@ app.use("/auth", googleAuthRouter);
 app.use("/connect", corsairAuthRouter);
 app.use("/webhooks", webhookRouter);
 app.use("/events", eventsRouter);
-app.use(
-  "/api/inngest",
-  serve({
-    client: inngest,
-    functions: inngestFunctions,
-  }),
-);
 app.use(
   "/api",
   apiLimiter,

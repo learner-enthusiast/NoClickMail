@@ -38,6 +38,8 @@ const envSchema = z.object({
   OPENAI_EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(1536),
   RAG_CHUNK_SIZE: z.coerce.number().int().positive().default(600),
   RAG_CHUNK_OVERLAP: z.coerce.number().int().nonnegative().default(80),
+  /** Mem0 Platform — optional; per-user long-term memory in RAG pipeline */
+  MEM0_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   /** Inngest — set INNGEST_DEV=1 locally with `inngest dev`; cloud keys in production */
   INNGEST_DEV: z.preprocess(emptyToUndefined, z.enum(["0", "1"]).optional()),
   INNGEST_EVENT_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),

@@ -1,43 +1,19 @@
-import { env } from "../../env";
-import { internal } from "../../error";
+import { createEmbedding, createEmbeddings } from "../../open-ai_SDK";
 
-type OpenAIEmbeddingResponse = {
-  data: { embedding: number[]; index: number }[];
-};
-
-/** OpenAI text embeddings for RAG indexing and retrieval. */
+/**
+ * OpenAI embedding client for RAG retrieval.
+ *
+ * Model and dimensions come from OPENAI_EMBEDDING_MODEL / OPENAI_EMBEDDING_DIMENSIONS env vars.
+ */
 class EmbeddingService {
-  private readonly model = env.OPENAI_EMBEDDING_MODEL;
-
+  /** Batch embed up to 96 texts in a single OpenAI API call. */
   async embed(texts: string[]): Promise<number[][]> {
-    if (texts.length === 0) return [];
-
-    const res = await fetch("https://api.openai.com/v1/embeddings", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: this.model,
-        input: texts,
-        dimensions: env.OPENAI_EMBEDDING_DIMENSIONS,
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      throw internal(`Embedding request failed: ${res.status} ${body.slice(0, 200)}`);
-    }
-
-    const json = (await res.json()) as OpenAIEmbeddingResponse;
-    return json.data.sort((a, b) => a.index - b.index).map((row) => row.embedding);
+    return createEmbeddings(texts);
   }
 
+  /** Convenience wrapper for single-query retrieval embedding. */
   async embedOne(text: string): Promise<number[]> {
-    const [vector] = await this.embed([text]);
-    if (!vector) throw internal("Embedding returned empty vector");
-    return vector;
+    return createEmbedding(text);
   }
 }
 

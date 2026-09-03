@@ -13,7 +13,7 @@ function assertNotAborted(signal: AbortSignal) {
 
 export const agentsRouter = router({
   runAgent: agentProcedure
-    .input(z.object({ prompt: z.string().min(1), threadId: z.string().uuid().optional() }))
+    .input(z.object({ prompt: z.string().min(1), threadId: z.uuid().optional() }))
     .mutation(async function* ({ ctx, input }) {
       assertNotAborted(ctx.signal);
 
@@ -48,18 +48,32 @@ export const agentsRouter = router({
         rag: rag.meta,
       };
 
-      const history = await chatService.buildContext(ctx.user, thread.id);
       let output = "";
 
       try {
-        for await (const delta of new CorsairAgent(ctx.user).executePromptStream(
-          rag.enhancedPrompt,
-          history,
-          ctx.signal,
-          { enhancedPrompt: rag.enhancedPrompt, retrieved: rag.retrieved },
-        )) {
-          output += delta;
-          yield { type: "delta" as const, text: delta };
+        if (rag.route === "clarify" || rag.route === "direct") {
+          output = rag.assistantMessage ?? "";
+          if (output) yield { type: "delta" as const, text: output };
+        } else if (rag.runCorsairAgent) {
+          for await (const delta of new CorsairAgent(ctx.user).executePromptStream(
+            rag.enhancedPrompt,
+            rag.history,
+            ctx.signal,
+            { enhancedPrompt: rag.enhancedPrompt, retrieved: rag.retrieved },
+          )) {
+            output += delta;
+            yield { type: "delta" as const, text: delta };
+          }
+        } else {
+          output = await ragService.generateAssistantReply(
+            {
+              prompt: rag.enhancedPrompt,
+              history: rag.history,
+              longTermMemories: rag.longTermMemories,
+            },
+            ctx.signal,
+          );
+          if (output) yield { type: "delta" as const, text: output };
         }
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
@@ -70,16 +84,25 @@ export const agentsRouter = router({
 
       assertNotAborted(ctx.signal);
 
-      await chatService.appendMessage({
+      const assistantMsg = await chatService.appendMessage({
         userId: ctx.user,
         threadId: thread.id,
         role: "assistant",
         content: output,
       });
 
+      await ragService.storeChatTurn({
+        userId: ctx.user,
+        threadId: thread.id,
+        messageId: userMsg.id,
+        userContent: input.prompt,
+        assistantContent: output,
+      });
+
       yield {
         type: "done" as const,
         threadId: thread.id,
+        messageId: assistantMsg.id,
         output,
         rag: rag.meta,
       };
@@ -97,7 +120,7 @@ export const agentsRouter = router({
       }));
     }),
   threadMessages: authenticatedProcedure
-    .input(z.object({ threadId: z.string().uuid() }))
+    .input(z.object({ threadId: z.uuid() }))
     .output(z.array(chatMessageModel))
     .query(async ({ ctx, input }) => {
       const messages = await chatService.getMessages(ctx.user, input.threadId);

@@ -1,76 +1,99 @@
-import { env } from "../env";
-import type { RetrievedChunkModelType } from "./model";
+import { completeChat } from "../open-ai_SDK";
+import type { LongTermMemoryModelType } from "./mem0/model";
+import type { RetrievedChunkModelType } from "./retrieve.model";
 
-type ChatCompletionResponse = {
-  choices?: { message?: { content?: string } }[];
-};
+const ENHANCER_MODEL = "gpt-4o-mini";
 
-/** Rewrites the user prompt using retrieved memory + original intent (gpt-4o-mini). */
+const ENHANCER_SYSTEM_PROMPT =
+  "You enhance user prompts for an email and calendar AI assistant (Orion). " +
+  "Use retrieved conversation excerpts and long-term user memory when they help " +
+  "disambiguate names, threads, preferences, or prior tasks. " +
+  "Output ONLY the enhanced instruction — clear, actionable, under 120 words. No preamble.";
+
+/**
+ * Stage 3 — Enhance.
+ *
+ * Rewrites the user's prompt using Pinecone chunks and Mem0 long-term memories.
+ * Falls back to template assembly if the LLM call fails.
+ */
 export async function enhanceUserPrompt(
   userPrompt: string,
   retrieved: RetrievedChunkModelType[],
+  longTermMemories: LongTermMemoryModelType[],
   signal?: AbortSignal,
 ): Promise<string> {
-  if (retrieved.length === 0) return userPrompt;
+  if (retrieved.length === 0 && longTermMemories.length === 0) return userPrompt;
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-  const memoryBlock = retrieved
-    .map(
-      (c, i) =>
-        `[${i + 1}] (relevance ${c.score.toFixed(2)}, ${c.role} message)\n${c.text}`,
-    )
+  const chunkBlock =
+    retrieved.length > 0
+      ? retrieved
+          .map(
+            (c, i) =>
+              `[chunk ${i + 1}] (relevance ${c.score.toFixed(2)}, ${c.role} message)\n${c.text}`,
+          )
+          .join("\n\n")
+      : "";
+
+  const mem0Block =
+    longTermMemories.length > 0
+      ? longTermMemories
+          .map(
+            (m, i) =>
+              `[memory ${i + 1}] (relevance ${m.score.toFixed(2)})\n${m.memory}`,
+          )
+          .join("\n\n")
+      : "";
+
+  const contextSections = [
+    chunkBlock ? `Recent conversation excerpts:\n${chunkBlock}` : "",
+    mem0Block ? `Long-term user memory:\n${mem0Block}` : "",
+  ]
+    .filter(Boolean)
     .join("\n\n");
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    signal,
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
+  try {
+    return await completeChat({
+      model: ENHANCER_MODEL,
+      systemPrompt: ENHANCER_SYSTEM_PROMPT,
+      userPrompt: `${contextSections}\n\nOriginal user prompt:\n${userPrompt}`,
       temperature: 0.2,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You enhance user prompts for an email and calendar AI assistant (Orion). " +
-            "Use retrieved conversation memory when it helps disambiguate names, threads, or prior tasks. " +
-            "Output ONLY the enhanced instruction — clear, actionable, under 120 words. No preamble.",
-        },
-        {
-          role: "user",
-          content: `Retrieved memory:\n${memoryBlock}\n\nOriginal user prompt:\n${userPrompt}`,
-        },
-      ],
-    }),
-  });
-
-  if (!res.ok) {
-    // Fallback: template-based enhancement if LLM call fails
-    return buildTemplateEnhancedPrompt(userPrompt, retrieved);
+      signal,
+    });
+  } catch {
+    return buildTemplateEnhancedPrompt(userPrompt, retrieved, longTermMemories);
   }
-
-  const json = (await res.json()) as ChatCompletionResponse;
-  const enhanced = json.choices?.[0]?.message?.content?.trim();
-  return enhanced && enhanced.length > 0
-    ? enhanced
-    : buildTemplateEnhancedPrompt(userPrompt, retrieved);
 }
 
 function buildTemplateEnhancedPrompt(
   userPrompt: string,
   retrieved: RetrievedChunkModelType[],
+  longTermMemories: LongTermMemoryModelType[],
 ): string {
-  const context = retrieved.map((c) => `- ${c.text}`).join("\n");
-  return [
-    "Use the following retrieved context from past conversations when relevant:",
-    context,
-    "",
+  const sections: string[] = [];
+
+  if (longTermMemories.length > 0) {
+    sections.push(
+      "Long-term user memory:",
+      ...longTermMemories.map((m) => `- ${m.memory}`),
+      "",
+    );
+  }
+
+  if (retrieved.length > 0) {
+    sections.push(
+      "Retrieved context from past conversations:",
+      ...retrieved.map((c) => `- ${c.text}`),
+      "",
+    );
+  }
+
+  sections.push(
     "User request:",
     userPrompt,
     "",
     "Respond to the user request using Corsair Gmail/Calendar tools as needed.",
-  ].join("\n");
+  );
+
+  return sections.join("\n");
 }
