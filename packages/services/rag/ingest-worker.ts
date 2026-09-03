@@ -1,7 +1,7 @@
 import { logger } from "@repo/logger";
 import { env } from "../env";
-import EmbeddingService from "../embeddings";
-import PineconeVectorStore from "../pinecone";
+import EmbeddingService from "./embeddings";
+import PineconeVectorStore from "./pinecone";
 import { chunkText } from "./chunk";
 import type { IngestResultModelType, IngestUserMessageInputModelType } from "./model";
 

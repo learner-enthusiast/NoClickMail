@@ -1,5 +1,5 @@
 import { Pinecone, type RecordMetadata } from "@pinecone-database/pinecone";
-import { env } from "../env";
+import { env } from "../../env";
 import type {
   PineconeConfigModelType,
   QueryVectorsInputModelType,

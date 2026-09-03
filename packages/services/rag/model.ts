@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { vectorMatchModel } from "../pinecone/model";
+import { vectorMatchModel } from "./pinecone/model";
 
 export const RAG_TOP_K = 3;
 

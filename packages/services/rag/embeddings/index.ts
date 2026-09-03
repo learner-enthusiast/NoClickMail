@@ -1,5 +1,5 @@
-import { env } from "../env";
-import { internal } from "../error";
+import { env } from "../../env";
+import { internal } from "../../error";
 
 type OpenAIEmbeddingResponse = {
   data: { embedding: number[]; index: number }[];

@@ -1,6 +1,6 @@
 import { logger } from "@repo/logger";
-import EmbeddingService from "../embeddings";
-import PineconeVectorStore from "../pinecone";
+import EmbeddingService from "./embeddings";
+import PineconeVectorStore from "./pinecone";
 import { inngest, isInngestEnabled } from "../inngest";
 import { RAG_MESSAGE_INGEST_EVENT } from "../inngest/events";
 import { runIngestUserMessage } from "./ingest-worker";

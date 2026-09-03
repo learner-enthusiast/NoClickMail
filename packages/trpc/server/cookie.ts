@@ -8,8 +8,7 @@ const ONE_DAY = 24 * ONE_HOUR;
 const ONE_MONTH = 30 * ONE_DAY;
 const ONE_YEAR = 12 * ONE_MONTH;
 
-export const isProductionEnv =
-  env.NODE_ENV === "production" || env.NODE_ENV === "prod";
+export const isProductionEnv = env.NODE_ENV === "production" || env.NODE_ENV === "prod";
 
 /** Parent domain for cross-subdomain cookies (orion.* + orionserver.*). */
 export function resolveCookieDomain(): string | undefined {

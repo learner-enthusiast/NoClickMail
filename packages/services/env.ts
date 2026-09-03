@@ -54,8 +54,7 @@ function createEnv(env: NodeJS.ProcessEnv) {
   return {
     ...data,
     CLIENT_URL: clientUrl,
-    CORSAIR_GMAIL_REDIRECT_URI:
-      data.CORSAIR_GMAIL_REDIRECT_URI ?? `${clientUrl}/dashboard/inbox`,
+    CORSAIR_GMAIL_REDIRECT_URI: data.CORSAIR_GMAIL_REDIRECT_URI ?? `${clientUrl}/dashboard/inbox`,
     CORSAIR_CALENDAR_REDIRECT_URI:
       data.CORSAIR_CALENDAR_REDIRECT_URI ?? `${clientUrl}/dashboard/calendar`,
     CORSAIR_CONNECT_REDIRECT_URI:
