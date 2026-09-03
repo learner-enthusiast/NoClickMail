@@ -106,9 +106,7 @@ function Transcript({
           Hello. Ask me to summarize, draft, or rewrite — or anything about your inbox.
         </div>
       )}
-      {showInitialLoading && (
-        <p className="text-sm text-muted-foreground">Loading conversation…</p>
-      )}
+      {showInitialLoading && <p className="text-sm text-muted-foreground">Loading conversation…</p>}
       {(messages ?? []).map((m) => (
         <Bubble key={m.id} role={m.role} content={m.content} />
       ))}
@@ -119,7 +117,27 @@ function Transcript({
     </>
   );
 }
+function getErrorMessage(e: unknown): string {
+  if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
+    return e.message;
+  }
+  return "Something went wrong. Please try again.";
+}
 
+function showRagToast(rag: RagRunMetaModelType) {
+  const retrieveMatches = rag.retrieve?.matchCount ?? 0;
+  const memoryMatches = rag.mem0?.matchCount ?? 0;
+  const parts = [
+    `route ${rag.route}`,
+    rag.runCorsairAgent ? "corsair" : null,
+    rag.enhance ? "prompt enhanced" : null,
+    `retrieved ${retrieveMatches}`,
+    `memories ${memoryMatches}`,
+  ].filter(Boolean);
+
+  toast.message("RAG complete", { description: parts.join(" · ") });
+  console.info("[RAG]", rag);
+}
 export function Chat() {
   const utils = trpc.useUtils();
   const { mutateAsync, reset, status } = runAgent();
@@ -175,32 +193,6 @@ export function Chat() {
       await utils.agent.threadMessages.refetch({ threadId: id });
     }
     return id;
-  }
-
-  function getErrorMessage(e: unknown): string {
-    if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
-      return e.message;
-    }
-    return "Something went wrong. Please try again.";
-  }
-
-  function showRagToast(rag: RagRunMetaModelType) {
-    if (rag.enabled) {
-      const matches = rag.retrieve?.matchCount ?? 0;
-      if (rag.ingest?.queued) {
-        toast.message("RAG ingest queued", {
-          description: `Background indexing started · retrieved ${matches} prior match(es)`,
-        });
-      } else {
-        const chunks = rag.ingest?.chunkCount ?? 0;
-        toast.message("RAG complete", {
-          description: `Indexed ${chunks} chunk(s) · retrieved ${matches} match(es)`,
-        });
-      }
-      console.info("[RAG]", rag);
-    } else if (rag.skippedReason) {
-      console.warn("[RAG skipped]", rag.skippedReason);
-    }
   }
 
   async function consumeAgentStream(
