@@ -20,7 +20,6 @@ const envSchema = z.object({
   BASE_URL: z.string().default("http://localhost:8000"),
   CORS_ORIGIN: z.string().optional(),
   CLIENT_URL: z.string().default("http://localhost:3000"),
-  OPENAPI_DOCS_SECRET: z.preprocess(emptyToUndefined, z.string().min(8).optional()),
   PUBLIC_OPENAPI_DOCS: z.enum(["true", "false"]).optional(),
   CORSAIR_CONNECT_REDIRECT_URI: z.string().url().optional(),
   GMAIL_PUBSUB_TOPIC_ID: z.string().optional(),

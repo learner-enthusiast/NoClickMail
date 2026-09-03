@@ -1,5 +1,5 @@
 {
-  "name": "trpc-monorepo",
+  "name": "noclickmail",
   "private": true,
   "scripts": {
     "build": "dotenv -- turbo build",
@@ -9,8 +9,7 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-    "inngest:dev": "pnpm --filter @repo/api inngest:dev",
-    "course-rag:ingest": "pnpm --filter @repo/services course-rag:ingest"
+    "inngest:dev": "pnpm --filter @repo/api inngest:dev"
   },
   "devDependencies": {
     "prettier": "^3.7.4",

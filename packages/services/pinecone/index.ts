@@ -10,10 +10,7 @@ import type {
 export type { PineconeConfigModelType } from "./model";
 
 /**
- * Pinecone vector store — one namespace per user (or course) for isolation.
- *
- * Pass `apiKey` + `index` to target a different Pinecone project/index than the
- * default env vars (e.g. course RAG vs Orion chat RAG).
+ * Pinecone vector store — one namespace per user for isolation.
  */
 class PineconeVectorStore {
   private client: Pinecone | null = null;
@@ -60,45 +57,6 @@ class PineconeVectorStore {
       })),
     });
     return records.length;
-  }
-
-  /** Generic upsert for arbitrary namespaces + metadata (e.g. course RAG). */
-  async upsertRecords(
-    namespaceId: string,
-    records: Array<{ id: string; values: number[]; metadata: RecordMetadata }>,
-  ): Promise<number> {
-    if (records.length === 0) return 0;
-
-    const namespace = this.index().namespace(namespaceId);
-    await namespace.upsert({ records });
-    return records.length;
-  }
-
-  async deleteByIds(namespaceId: string, ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-    const namespace = this.index().namespace(namespaceId);
-    await namespace.deleteMany({ ids });
-  }
-
-  async queryRecords(
-    namespaceId: string,
-    vector: number[],
-    topK: number,
-  ): Promise<Array<{ id: string; score: number; metadata: RecordMetadata }>> {
-    const namespace = this.index().namespace(namespaceId);
-    const result = await namespace.query({
-      vector,
-      topK,
-      includeMetadata: true,
-    });
-
-    return (result.matches ?? [])
-      .filter((m) => m.metadata)
-      .map((m) => ({
-        id: m.id ?? "",
-        score: m.score ?? 0,
-        metadata: m.metadata as RecordMetadata,
-      }));
   }
 
   async query(input: QueryVectorsInputModelType): Promise<VectorMatchModelType[]> {

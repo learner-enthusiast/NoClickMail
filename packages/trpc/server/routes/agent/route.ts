@@ -1,13 +1,9 @@
 import z from "zod";
 import { TRPCError } from "@trpc/server";
 import { agentProcedure, authenticatedProcedure, router } from "../../trpc";
-import { generatePath } from "../../utils/path-generator";
 import { chatService, CorsairAgent, ragService } from "../../services";
 import { zodUndefinedModel } from "../../schema";
 import { chatThreadModel, chatMessageModel } from "@repo/services/chat/model";
-
-const TAGS = ["Agent"];
-const getPath = generatePath("/agent");
 
 function assertNotAborted(signal: AbortSignal) {
   if (signal.aborted) {

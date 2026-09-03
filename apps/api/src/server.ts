@@ -20,7 +20,7 @@ import { inngest, inngestFunctions } from "@repo/services/inngest";
 
 export const app = express();
 const openApiDocument = generateOpenApiDocument(serverRouter, {
-  title: "Streamyst OpenAPI",
+  title: "Orion API",
   version: "1.0.0",
   baseUrl: env.BASE_URL.concat("/api"),
 });
@@ -73,20 +73,22 @@ app.use((req, res, next) => {
   next();
 });
 app.get("/", (req, res) => {
-  return res.json({ message: "Streamyst is up and running..." });
+  return res.json({ message: "Orion API is up and running" });
 });
 
 app.get("/health", (req, res) => {
-  return res.json({ message: "Streamyst server is healthy", healthy: true });
+  return res.json({ message: "Orion API is healthy", healthy: true });
 });
 
-logger.debug(`openapi.json: ${env.BASE_URL}/openapi.json`);
-app.get("/openapi.json", (req, res) => {
-  return res.json(openApiDocument);
-});
+if (env.PUBLIC_OPENAPI_DOCS === "true") {
+  logger.debug(`openapi.json: ${env.BASE_URL}/openapi.json`);
+  app.get("/openapi.json", (req, res) => {
+    return res.json(openApiDocument);
+  });
 
-logger.debug(`docs: ${env.BASE_URL}/docs`);
-app.use("/docs", apiReference({ url: "/openapi.json" }));
+  logger.debug(`docs: ${env.BASE_URL}/docs`);
+  app.use("/docs", apiReference({ url: "/openapi.json" }));
+}
 app.use("/auth", googleAuthRouter);
 app.use("/connect", corsairAuthRouter);
 app.use("/webhooks", webhookRouter);

@@ -46,9 +46,6 @@
 #   OPENAI_EMBEDDING_MODEL               (defaults to text-embedding-3-small)
 #   RAG_CHUNK_SIZE                       (defaults to 600)
 #   RAG_CHUNK_OVERLAP                    (defaults to 80)
-#   COURSE_PINECONE_API_KEY              (course RAG — optional)
-#   COURSE_PINECONE_INDEX                (course RAG — optional)
-#   COURSE_RAG_COURSE_ID                 (defaults to udemy-course)
 #   LOGGER_LEVEL                         (defaults to info)
 #   PUBLIC_OPENAPI_DOCS                  (defaults to false)
 #
@@ -178,9 +175,6 @@ jobs:
           RAG_CHUNK_OVERLAP: ${{ secrets.RAG_CHUNK_OVERLAP }}
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           PINECONE_INDEX: ${{ secrets.PINECONE_INDEX }}
-          COURSE_PINECONE_API_KEY: ${{ secrets.COURSE_PINECONE_API_KEY }}
-          COURSE_PINECONE_INDEX: ${{ secrets.COURSE_PINECONE_INDEX }}
-          COURSE_RAG_COURSE_ID: ${{ secrets.COURSE_RAG_COURSE_ID }}
           INNGEST_EVENT_KEY: ${{ secrets.INNGEST_EVENT_KEY }}
           INNGEST_SIGNING_KEY: ${{ secrets.INNGEST_SIGNING_KEY }}
           CORSAIR_KEK: ${{ secrets.CORSAIR_KEK }}
@@ -225,7 +219,6 @@ jobs:
           EMBEDDING_MODEL="${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}"
           RAG_SIZE="${RAG_CHUNK_SIZE:-600}"
           RAG_OVERLAP="${RAG_CHUNK_OVERLAP:-80}"
-          COURSE_ID="${COURSE_RAG_COURSE_ID:-udemy-course}"
 
           require_secret POSTGRES_PASSWORD "${POSTGRES_PASSWORD:-}"
           require_secret CLIENT_URL "${CLIENT:-}"
@@ -254,7 +247,6 @@ jobs:
             printf 'PORT=8000\n'
             printf 'NODE_ENV=production\n'
             printf 'BASE_URL=%s\n' "$BASE"
-            printf 'INTERNAL_URL=%s\n' "$BASE"
             printf 'CLIENT_URL=%s\n' "$CLIENT"
             printf 'CORS_ORIGIN=%s\n' "$CORS"
             printf 'DATABASE_URL=%s\n' "$LOCAL_DB"
@@ -274,9 +266,6 @@ jobs:
             printf 'RAG_CHUNK_OVERLAP=%s\n' "$RAG_OVERLAP"
             printf 'PINECONE_API_KEY=%s\n' "$PINECONE_API_KEY"
             printf 'PINECONE_INDEX=%s\n' "$PINECONE_INDEX"
-            printf 'COURSE_PINECONE_API_KEY=%s\n' "${COURSE_PINECONE_API_KEY:-}"
-            printf 'COURSE_PINECONE_INDEX=%s\n' "${COURSE_PINECONE_INDEX:-}"
-            printf 'COURSE_RAG_COURSE_ID=%s\n' "$COURSE_ID"
             printf 'INNGEST_EVENT_KEY=%s\n' "$INNGEST_EVENT_KEY"
             printf 'INNGEST_SIGNING_KEY=%s\n' "$INNGEST_SIGNING_KEY"
             printf 'CORSAIR_KEK=%s\n' "$CORSAIR_KEK"
@@ -349,8 +338,11 @@ jobs:
           echo "=== Container status ==="
           docker compose -f docker-compose.deploy.yml --env-file .env ps
 
-          echo "=== API logs (last 80 lines) ==="
-          docker compose -f docker-compose.deploy.yml --env-file .env logs api --tail 80 || true
+          echo "=== Migrate logs ==="
+          docker compose -f docker-compose.deploy.yml --env-file .env logs migrate || true
+
+          echo "=== API logs (last 120 lines) ==="
+          docker compose -f docker-compose.deploy.yml --env-file .env logs api --tail 120 || true
 
           curl -fsS -o /dev/null -w "Web HTTP %{http_code}\n" \
             --retry 8 --retry-delay 5 --retry-all-errors \

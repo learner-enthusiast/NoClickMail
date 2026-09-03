@@ -89,7 +89,6 @@ flowchart TB
 | Mode | When | Doc section |
 | ---- | ---- | ----------- |
 | **Local dev** | Day-to-day development | [Quick start](#quick-start-local) |
-| **Split-host prod** | Web + API on separate subdomains (PM2) | [Split-host production](#split-host-production) |
 | **Home-server Docker** | Self-hosted via GitHub Actions + SSH | [Home-server deployment](#home-server-deployment) |
 
 ---
@@ -110,7 +109,7 @@ flowchart TB
 
 ```bash
 git clone <repo-url>
-cd trpc-monorepo
+cd NoClickMail
 pnpm install
 ```
 
@@ -262,8 +261,6 @@ Cookies on home-server deploy use same-origin `/trpc`; set `COOKIE_DOMAIN` if yo
 | `OPENAI_EMBEDDING_DIMENSIONS` | Yes             | Must match Pinecone index dimension (1024/1536)  |
 | `RAG_CHUNK_SIZE`              | No              | Default `600`                                    |
 | `RAG_CHUNK_OVERLAP`           | No              | Default `80`                                     |
-| `COURSE_PINECONE_API_KEY`     | No              | Optional second index for course-web             |
-| `COURSE_PINECONE_INDEX`       | No              | Optional course RAG index                        |
 
 ---
 
@@ -299,8 +296,7 @@ RAG ingest runs as Inngest functions triggered on user messages.
 | Variable              | Description                                      |
 | --------------------- | ------------------------------------------------ |
 | `LOGGER_LEVEL`        | `debug` \| `info` \| `error`                     |
-| `PUBLIC_OPENAPI_DOCS` | `true` to expose `/docs`                         |
-| `OPENAPI_DOCS_SECRET` | Protect `/docs` in production                    |
+| `PUBLIC_OPENAPI_DOCS` | `true` to expose `/docs` (default `true` in dev, `false` in prod) |
 | `SKIP_ENV_VALIDATION` | Set `true` for Docker/CI builds without full env |
 | `DATABASE_URL_DIRECT` | Direct Postgres URL for migrations / db sync   |
 
@@ -418,7 +414,7 @@ Means `corsair:setup` was not run on this database. Run it and restart the API.
 
 ## Split-host production
 
-Web and API on **separate subdomains** (legacy PM2 deploy on a VPS).
+Web and API on **separate subdomains** (manual deploy on a VPS with `pnpm build` + process manager of your choice).
 
 | Role | Host                            |
 | ---- | ------------------------------- |
@@ -443,8 +439,6 @@ CORSAIR_WEBHOOK_BASE=https://orionserver.example.com
 - [ ] Google Console redirect URIs on API host
 - [ ] Pub/Sub push subscription on API webhook URL
 - [ ] nginx forwards `Authorization` for Pub/Sub JWT verification
-
-Manual deploy: `.github/workflows/deploy.yml` (workflow_dispatch) — `git pull` → `pnpm install` → `pnpm db:migrate` → `pnpm build` → `pm2 restart`.
 
 ---
 

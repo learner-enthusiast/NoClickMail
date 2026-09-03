@@ -101,15 +101,12 @@ export const listSentContactsOutputModel = z.object({
   contacts: z.array(contactSuggestionModel),
 });
 export type ListSentContactsOutputModelType = z.infer<typeof listSentContactsOutputModel>;
-// packages/services/gmail/model.ts
 
 export const listMessagesPaginationModel = z.object({
   maxResults: z.number().int().min(1).max(100).default(20),
   pageToken: z.string().optional(),
   q: z.string().optional(),
 });
-
-// inbox — unchanged shape, same defaults
 
 export const listSentInputModel = listMessagesPaginationModel;
 export const listDraftsInputModel = listMessagesPaginationModel;

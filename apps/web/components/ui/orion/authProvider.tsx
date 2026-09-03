@@ -2,13 +2,11 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import React, { createContext, useCallback, useContext, useEffect, useMemo } from "react";
-import type { RouterInputs, RouterOutputs } from "@repo/trpc/client";
+import type { RouterOutputs } from "@repo/trpc/client";
 import { trpc } from "~/trpc/client";
 import { clearCsrfCookieClient } from "~/lib/clear-csrf-cookie";
 
 type User = RouterOutputs["auth"]["me"];
-type LoginInput = RouterInputs["auth"]["loginUserWithEmailandPassword"];
-type SignUpInput = RouterInputs["auth"]["createUserWithEmailandPassword"];
 type AuthError = ReturnType<typeof trpc.auth.me.useQuery>["error"];
 
 type AuthContextValue = {
@@ -18,11 +16,7 @@ type AuthContextValue = {
   isError: boolean;
   error: AuthError;
   refetch: () => void;
-  login: (input: LoginInput) => Promise<void>;
-  signUp: (input: SignUpInput) => Promise<void>;
   logout: () => Promise<void>;
-  isLoggingIn: boolean;
-  isSigningUp: boolean;
   isLoggingOut: boolean;
 };
 
@@ -34,9 +28,6 @@ const AUTHENTICATED_ROUTES = [
   "/dashboard/trash",
   "/dashboard/help",
 ];
-
-/** Routes authenticated users may visit without being redirected to the dashboard. */
-const PUBLIC_ROUTES = ["/", "/privacy", "/terms", "/api-auth/login"];
 
 function isAuthenticatedRoute(pathname: string) {
   return AUTHENTICATED_ROUTES.some(
@@ -70,37 +61,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const isProtected = isAuthenticatedRoute(pathname);
 
-    // Unauthenticated users may only be on public routes → bounce off protected pages.
     if (!isAuthenticated && isProtected) {
       router.replace("/api-auth/login");
     }
   }, [isLoading, isAuthenticated, pathname, router]);
-
-  const loginMutation = trpc.auth.loginUserWithEmailandPassword.useMutation({
-    onSuccess: async () => {
-      await utils.auth.me.invalidate();
-    },
-  });
-
-  const signUpMutation = trpc.auth.createUserWithEmailandPassword.useMutation({
-    onSuccess: async () => {
-      await utils.auth.me.invalidate();
-    },
-  });
-
-  const login = useCallback(
-    async (input: LoginInput) => {
-      await loginMutation.mutateAsync(input);
-    },
-    [loginMutation],
-  );
-
-  const signUp = useCallback(
-    async (input: SignUpInput) => {
-      await signUpMutation.mutateAsync(input);
-    },
-    [signUpMutation],
-  );
 
   const logoutMutation = trpc.auth.logout.useMutation();
 
@@ -123,27 +87,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isError,
       error: error ?? null,
       refetch,
-      login,
-      signUp,
       logout,
-      isLoggingIn: loginMutation.isPending,
-      isSigningUp: signUpMutation.isPending,
       isLoggingOut: logoutMutation.isPending,
     }),
-    [
-      user,
-      isAuthenticated,
-      isLoading,
-      isError,
-      error,
-      refetch,
-      login,
-      signUp,
-      logout,
-      loginMutation.isPending,
-      signUpMutation.isPending,
-      logoutMutation.isPending,
-    ],
+    [user, isAuthenticated, isLoading, isError, error, refetch, logout, logoutMutation.isPending],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
