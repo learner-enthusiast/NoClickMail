@@ -92,18 +92,9 @@ jobs:
           docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/dist/scripts/corsair-setup.js
           docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/pg /app/apps/api/node_modules/drizzle-orm
 
-          echo "=== External runtime deps (tsup leaves these in node_modules) ==="
-          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/@corsair-dev/mcp
-          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/@openai/agents
-          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/corsair
-
-          echo "=== Require check (must not MODULE_NOT_FOUND) ==="
-          docker run --rm -w /app/apps/api "${{ env.API_IMAGE }}" node -e "
-            require('@corsair-dev/mcp');
-            require('@openai/agents');
-            require('corsair');
-            console.log('runtime deps OK');
-          "
+          echo "=== Bundled API dist (corsair deps are inlined by tsup) ==="
+          docker run --rm "${{ env.API_IMAGE }}" ls -lh /app/apps/api/dist/index.js
+          docker run --rm "${{ env.API_IMAGE }}" sh -c '! grep -q "@corsair-dev/mcp" /app/apps/api/dist/index.js'
 
           echo "=== Dry-run migrate (expect DATABASE_URL error, not module-not-found) ==="
           docker run --rm "${{ env.API_IMAGE }}" node /app/apps/api/migrate.mjs 2>&1 | head -20 || true
