@@ -586,6 +586,10 @@ docker compose -f docker-compose.deploy.yml ps
 # Logs
 docker compose -f docker-compose.deploy.yml logs -f api
 docker compose -f docker-compose.deploy.yml logs -f db-sync
+docker compose -f docker-compose.deploy.yml logs migrate
+
+# Manual staged deploy (same as CI)
+DEPLOY_SHA=manual ./deploy-remote.sh
 
 # Restart after manual .env edit (normally CI overwrites .env)
 docker compose -f docker-compose.deploy.yml --env-file .env up -d
@@ -595,11 +599,12 @@ docker compose -f docker-compose.deploy.yml --env-file .env up -d
 
 | File | Purpose |
 | ---- | ------- |
-| `docker/Dockerfile.api` | Express API (tsup bundle + migrate on start) |
+| `docker/Dockerfile.api` | Express API (tsup bundle) |
 | `docker/Dockerfile.web` | Next.js standalone |
 | `docker-compose.deploy.yml` | Production stack |
 | `docker/nginx.deploy.conf` | Reverse proxy rules |
 | `docker/db-sync-entrypoint.sh` | Daily Neon backup + retry logic |
+| `docker/deploy-remote.sh` | Staged deploy + diagnostics (used by CI over SSH) |
 | `apps/api/migrate.mjs` | Drizzle migrations (run by `migrate` service) |
 
 ---

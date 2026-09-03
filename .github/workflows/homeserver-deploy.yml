@@ -84,6 +84,15 @@ jobs:
           cache-from: type=gha,scope=noclickmail-api
           cache-to: type=gha,mode=max,scope=noclickmail-api
 
+      - name: Verify migrate script in API image
+        run: |
+          set -euo pipefail
+          echo "=== Checking migrate script exists in API image ==="
+          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/migrate.mjs
+          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/pg /app/apps/api/node_modules/drizzle-orm
+          echo "=== Dry-run migrate (expect DATABASE_URL error, not module-not-found) ==="
+          docker run --rm "${{ env.API_IMAGE }}" node /app/apps/api/migrate.mjs 2>&1 | head -20 || true
+
       - name: Build Web image
         uses: docker/build-push-action@v6
         with:
@@ -286,69 +295,58 @@ jobs:
           } > .env.deploy
           chmod 600 .env.deploy
 
+          echo "=== .env.deploy summary (no secrets) ==="
+          grep -E '^(POSTGRES_USER|POSTGRES_DB|CLIENT_URL|API_IMAGE_TAG|WEB_IMAGE_TAG|EXTERNAL_PORT|NODE_ENV)=' .env.deploy
+          echo "POSTGRES_PASSWORD=<set>"
+          echo "DATABASE_URL=postgresql://${PG_USER}:***@postgres:5432/${PG_DB}"
+          echo "SYNC_DATABASE_URL=<remote neon/hosted url>"
+
       - name: Upload images, compose, nginx config, and env
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
           set -euo pipefail
+          echo "=== Uploading to homeserver:${DEPLOY_PATH} ==="
           ssh homeserver "mkdir -p '${DEPLOY_PATH}'"
           scp noclickmail-images.tar.gz "homeserver:${DEPLOY_PATH}/noclickmail-images.tar.gz"
           scp docker-compose.deploy.yml "homeserver:${DEPLOY_PATH}/docker-compose.deploy.yml"
           scp docker/nginx.deploy.conf "homeserver:${DEPLOY_PATH}/nginx.deploy.conf"
           scp docker/db-sync-entrypoint.sh "homeserver:${DEPLOY_PATH}/db-sync-entrypoint.sh"
+          scp docker/deploy-remote.sh "homeserver:${DEPLOY_PATH}/deploy-remote.sh"
           scp .env.deploy "homeserver:${DEPLOY_PATH}/.env"
-          ssh homeserver "chmod +x '${DEPLOY_PATH}/db-sync-entrypoint.sh'"
+          ssh homeserver "chmod +x '${DEPLOY_PATH}/db-sync-entrypoint.sh' '${DEPLOY_PATH}/deploy-remote.sh'"
+          echo "=== Upload complete ==="
 
-      - name: Load images and restart containers
+      - name: Deploy on home server
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
           ssh homeserver \
-            "DEPLOY_PATH='${DEPLOY_PATH}' bash -s" <<'REMOTE'
-          set -euo pipefail
-          cd "$DEPLOY_PATH"
+            "DEPLOY_PATH='${DEPLOY_PATH}' DEPLOY_SHA='${{ github.sha }}' bash -s" \
+            < docker/deploy-remote.sh
 
-          echo "Loading Docker images..."
-          gunzip -c noclickmail-images.tar.gz | docker load
-          rm -f noclickmail-images.tar.gz
-
-          docker compose -f docker-compose.deploy.yml --env-file .env up -d --remove-orphans
-          docker image prune -f
-          REMOTE
-
-      - name: Wait for services to start
-        run: |
-          echo "Waiting 10 minutes for containers to start (migrations, API, web)..."
-          sleep 600
-
-      - name: Health check
+      - name: Dump deploy diagnostics on failure
+        if: failure()
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
+          echo "=== Deploy failed — collecting remote diagnostics ==="
           ssh homeserver \
-            "DEPLOY_PATH='${DEPLOY_PATH}' bash -s" <<'REMOTE'
-          set -euo pipefail
+            "DEPLOY_PATH='${DEPLOY_PATH}' bash -s" <<'REMOTE' || true
+          set -uo pipefail
           cd "$DEPLOY_PATH"
-          set -a
-          # shellcheck disable=SC1091
-          source .env
-          set +a
-          PORT="${EXTERNAL_PORT:-8080}"
-
-          echo "=== Container status ==="
-          docker compose -f docker-compose.deploy.yml --env-file .env ps
-
-          echo "=== Migrate logs ==="
-          docker compose -f docker-compose.deploy.yml --env-file .env logs migrate || true
-
-          echo "=== API logs (last 120 lines) ==="
-          docker compose -f docker-compose.deploy.yml --env-file .env logs api --tail 120 || true
-
-          curl -fsS -o /dev/null -w "Web HTTP %{http_code}\n" \
-            --retry 8 --retry-delay 5 --retry-all-errors \
-            "http://127.0.0.1:${PORT}/"
-
-          curl -fsS -o /dev/null -w "API HTTP %{http_code}\n" \
-            --retry 12 --retry-delay 5 --retry-all-errors \
-            "http://127.0.0.1:${PORT}/health"
+          echo "=== Last 200 lines of any deploy output saved on server ==="
+          COMPOSE_FILE="docker-compose.deploy.yml"
+          ENV_FILE=".env"
+          echo "--- docker compose ps -a ---"
+          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps -a 2>/dev/null || true
+          echo "--- migrate logs (full) ---"
+          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs migrate 2>/dev/null || true
+          echo "--- migrate container inspect ---"
+          MID="$(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps -aq migrate 2>/dev/null | head -1 || true)"
+          if [ -n "$MID" ]; then docker inspect "$MID" 2>/dev/null || true; fi
+          echo "--- api logs (last 200) ---"
+          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs api --tail 200 2>/dev/null || true
+          echo "--- postgres logs (last 100) ---"
+          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs postgres --tail 100 2>/dev/null || true
           REMOTE
