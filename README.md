@@ -398,6 +398,8 @@ Script: `apps/api/src/scripts/corsair-setup.ts`
 - Changed `CORSAIR_KEK` (will need re-setup)
 - Changed Google OAuth client credentials
 
+**Home-server Docker deploy** runs this automatically after migrations (`corsair-setup` service in `docker-compose.deploy.yml`) before the API starts.
+
 ### Per-user connect (after setup)
 
 1. User signs in to Orion
@@ -606,6 +608,7 @@ docker compose -f docker-compose.deploy.yml --env-file .env up -d
 | `docker/db-sync-entrypoint.sh` | Daily Neon backup + retry logic |
 | `docker/deploy-remote.sh` | Staged deploy + diagnostics (used by CI over SSH) |
 | `apps/api/migrate.mjs` | Drizzle migrations (run by `migrate` service) |
+| `apps/api/dist/scripts/corsair-setup.js` | Corsair integration bootstrap (run by `corsair-setup` service) |
 
 ---
 

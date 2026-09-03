@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["./src/index.ts"],
+  entry: ["./src/index.ts", "./src/scripts/corsair-setup.ts"],
   noExternal: [/^@repo\//],
   external: [
     // optional peer imports inside @corsair-dev/mcp — not installed, not needed

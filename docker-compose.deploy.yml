@@ -34,6 +34,18 @@ services:
         condition: service_healthy
     restart: "no"
 
+  corsair-setup:
+    image: noclickmail-api:${API_IMAGE_TAG:-latest}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-noclickmail}
+      DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-noclickmail}
+    entrypoint: ["node", "/app/apps/api/dist/scripts/corsair-setup.js"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
   api:
     image: noclickmail-api:${API_IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -49,6 +61,8 @@ services:
       postgres:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      corsair-setup:
         condition: service_completed_successfully
     healthcheck:
       test:

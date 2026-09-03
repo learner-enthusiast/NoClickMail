@@ -82,6 +82,9 @@ dump_diagnostics() {
   log_step "Migrate logs (all available)"
   docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs migrate 2>/dev/null || true
 
+  log_step "Corsair setup logs (all available)"
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs corsair-setup 2>/dev/null || true
+
   log_step "API logs (last 150 lines)"
   docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs api --tail 150 2>/dev/null || true
 
@@ -122,6 +125,17 @@ run_migrations() {
   fi
 
   echo "Migrations completed successfully."
+}
+
+run_corsair_setup() {
+  log_step "Running Corsair setup (docker compose run --rm corsair-setup)"
+  log_step "Configures corsair_integrations + encrypted Google OAuth keys in Postgres"
+
+  if ! docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm --no-TTY corsair-setup; then
+    fail_with_diagnostics "Corsair setup exited non-zero"
+  fi
+
+  echo "Corsair setup completed successfully."
 }
 
 wait_for_api_healthy() {
@@ -169,6 +183,9 @@ wait_for_postgres
 
 log_section "Run database migrations"
 run_migrations
+
+log_section "Run Corsair setup"
+run_corsair_setup
 
 log_section "Start application stack (api, web, db-sync, proxy)"
 if ! docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans; then

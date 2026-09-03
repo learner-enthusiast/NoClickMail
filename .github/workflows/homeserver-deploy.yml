@@ -89,6 +89,7 @@ jobs:
           set -euo pipefail
           echo "=== Migrate script ==="
           docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/migrate.mjs
+          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/dist/scripts/corsair-setup.js
           docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/pg /app/apps/api/node_modules/drizzle-orm
 
           echo "=== External runtime deps (tsup leaves these in node_modules) ==="
@@ -356,6 +357,8 @@ jobs:
           docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps -a 2>/dev/null || true
           echo "--- migrate logs (full) ---"
           docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs migrate 2>/dev/null || true
+          echo "--- corsair-setup logs (full) ---"
+          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs corsair-setup 2>/dev/null || true
           echo "--- migrate container inspect ---"
           MID="$(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps -aq migrate 2>/dev/null | head -1 || true)"
           if [ -n "$MID" ]; then docker inspect "$MID" 2>/dev/null || true; fi
