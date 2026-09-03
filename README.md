@@ -600,7 +600,7 @@ docker compose -f docker-compose.deploy.yml --env-file .env up -d
 | `docker-compose.deploy.yml` | Production stack |
 | `docker/nginx.deploy.conf` | Reverse proxy rules |
 | `docker/db-sync-entrypoint.sh` | Daily Neon backup + retry logic |
-| `docker/migrate.mjs` | Drizzle migrations at API startup |
+| `apps/api/migrate.mjs` | Drizzle migrations (run by `migrate` service) |
 
 ---
 

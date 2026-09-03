@@ -28,7 +28,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-noclickmail}
       DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-noclickmail}
-    entrypoint: ["node", "/app/docker/migrate.mjs"]
+    entrypoint: ["node", "/app/apps/api/migrate.mjs"]
     depends_on:
       postgres:
         condition: service_healthy
