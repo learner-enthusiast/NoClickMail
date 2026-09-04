@@ -8,7 +8,6 @@ export async function verifyPubSubPush(
 ): Promise<boolean> {
   const auth = req.header("authorization");
   if (!auth?.startsWith("Bearer ")) return false;
-
   try {
     const ticket = await client.verifyIdToken({
       idToken: auth.slice(7),

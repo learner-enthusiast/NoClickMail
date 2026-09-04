@@ -12,7 +12,14 @@ function normalizeEnvUrl(value: string) {
 }
 function parseCorsOrigins(value: string | undefined, fallback: string): string[] {
   const raw = value ?? fallback;
-  return [...new Set(raw.split(",").map((o) => normalizeEnvUrl(o)).filter(Boolean))];
+  return [
+    ...new Set(
+      raw
+        .split(",")
+        .map((o) => normalizeEnvUrl(o))
+        .filter(Boolean),
+    ),
+  ];
 }
 const envSchema = z.object({
   PORT: z.string().optional(),
@@ -45,6 +52,7 @@ function createEnv(env: NodeJS.ProcessEnv) {
     CORSAIR_CONNECT_REDIRECT_URI:
       data.CORSAIR_CONNECT_REDIRECT_URI ?? `${clientUrl}/connect/callback`,
     CORSAIR_WEBHOOK_BASE: data.CORSAIR_WEBHOOK_BASE ?? baseUrl,
+    CORSAIR_WEBHOOK_SECRET: data.CORSAIR_WEBHOOK_SECRET ?? "",
   };
 }
 

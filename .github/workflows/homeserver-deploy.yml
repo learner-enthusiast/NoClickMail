@@ -1,29 +1,28 @@
-# SSH deploy to home server — builds Docker images ON the server (no CI image transfer).
-#
-# Flow:
-#   1. Manual first deploy on VPS: docker/deploy-manual.sh (see script header)
-#   2. Auto deploy: GitHub Actions → workflow_dispatch → SSH → git pull → deploy-remote.sh
+# SSH deploy to home server — git pull, migrate, restart systemd service.
 #
 # Required GitHub repository secrets:
 #   SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, DEPLOY_PATH
 #   CF_SERVICE_TOKEN_ID, CF_SERVICE_TOKEN_SECRET  (Cloudflare Access SSH)
-#   REPO_ROOT  (optional — git clone path on server; defaults to DEPLOY_PATH)
-#   … plus app secrets used to generate .env (see deploy-manual / .env.example)
 #
-# One-time on the server: Docker, Docker Compose, git clone of this repo.
+# One-time on the server:
+#   - git clone of this repo at DEPLOY_PATH
+#   - production .env at repo root (not committed)
+#   - pnpm install && pnpm build
+#   - systemd unit: orion (e.g. WorkingDirectory=DEPLOY_PATH, ExecStart=pnpm start)
 
 name: Home Server Deploy
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   ssh-deploy:
-    name: SSH deploy (build on server)
+    name: SSH deploy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
       - name: Install cloudflared
         run: |
           curl -L --fail \
@@ -69,182 +68,67 @@ jobs:
           EOF
           chmod 600 ~/.ssh/config
 
-      - name: Create production env file
-        env:
-          SYNC_DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SYNC_DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-          CLIENT_URL: ${{ secrets.CLIENT_URL }}
-          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
-          REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
-          ACCESS_TOKEN_EXPIRY: ${{ secrets.ACCESS_TOKEN_EXPIRY }}
-          REFRESH_TOKEN_EXPIRY: ${{ secrets.REFRESH_TOKEN_EXPIRY }}
-          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-          GOOGLE_OAUTH_REDIRECT_URI: ${{ secrets.GOOGLE_OAUTH_REDIRECT_URI }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_EMBEDDING_MODEL: ${{ secrets.OPENAI_EMBEDDING_MODEL }}
-          OPENAI_EMBEDDING_DIMENSIONS: ${{ secrets.OPENAI_EMBEDDING_DIMENSIONS }}
-          RAG_CHUNK_SIZE: ${{ secrets.RAG_CHUNK_SIZE }}
-          RAG_CHUNK_OVERLAP: ${{ secrets.RAG_CHUNK_OVERLAP }}
-          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
-          PINECONE_INDEX: ${{ secrets.PINECONE_INDEX }}
-          INNGEST_EVENT_KEY: ${{ secrets.INNGEST_EVENT_KEY }}
-          INNGEST_SIGNING_KEY: ${{ secrets.INNGEST_SIGNING_KEY }}
-          CORSAIR_KEK: ${{ secrets.CORSAIR_KEK }}
-          CORSAIR_GMAIL_REDIRECT_URI: ${{ secrets.CORSAIR_GMAIL_REDIRECT_URI }}
-          CORSAIR_CALENDAR_REDIRECT_URI: ${{ secrets.CORSAIR_CALENDAR_REDIRECT_URI }}
-          CORSAIR_CONNECT_REDIRECT_URI: ${{ secrets.CORSAIR_CONNECT_REDIRECT_URI }}
-          CORSAIR_WEBHOOK_BASE: ${{ secrets.CORSAIR_WEBHOOK_BASE }}
-          CORSAIR_WEBHOOK_SECRET: ${{ secrets.CORSAIR_WEBHOOK_SECRET }}
-          GMAIL_PUBSUB_TOPIC_ID: ${{ secrets.GMAIL_PUBSUB_TOPIC_ID }}
-          CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
-          COOKIE_DOMAIN: ${{ secrets.COOKIE_DOMAIN }}
-          EXTERNAL_PORT: ${{ secrets.EXTERNAL_PORT }}
-          LOGGER_LEVEL: ${{ secrets.LOGGER_LEVEL }}
-          PUBLIC_OPENAPI_DOCS: ${{ secrets.PUBLIC_OPENAPI_DOCS }}
-          MEM0_API_KEY: ${{ secrets.MEM0_API_KEY }}
-        run: |
-          set -euo pipefail
-          umask 077
-
-          require_secret() {
-            name="$1"
-            value="$2"
-            if [ -z "$value" ]; then
-              echo "Missing required secret: $name"
-              exit 1
-            fi
-          }
-
-          CLIENT="${CLIENT_URL%/}"
-          BASE="${CLIENT}"
-          GOOGLE_REDIRECT="${GOOGLE_OAUTH_REDIRECT_URI:-${CLIENT}/auth/google/callback}"
-          CORS="${CORS_ORIGIN:-${CLIENT}}"
-          CORSAIR_GMAIL="${CORSAIR_GMAIL_REDIRECT_URI:-${CLIENT}/dashboard/inbox}"
-          CORSAIR_CALENDAR="${CORSAIR_CALENDAR_REDIRECT_URI:-${CLIENT}/dashboard/calendar}"
-          CORSAIR_CONNECT="${CORSAIR_CONNECT_REDIRECT_URI:-${CLIENT}/connect/callback}"
-          CORSAIR_WEBHOOK="${CORSAIR_WEBHOOK_BASE:-${CLIENT}}"
-          PG_USER="${POSTGRES_USER:-postgres}"
-          PG_DB="${POSTGRES_DB:-noclickmail}"
-          REMOTE_SYNC="${SYNC_DATABASE_URL_DIRECT:-$SYNC_DATABASE_URL}"
-          LOCAL_DB="postgresql://${PG_USER}:${POSTGRES_PASSWORD}@postgres:5432/${PG_DB}"
-          TOKEN_ACCESS_EXPIRY="${ACCESS_TOKEN_EXPIRY:-1d}"
-          TOKEN_REFRESH_EXPIRY="${REFRESH_TOKEN_EXPIRY:-30d}"
-          EMBEDDING_MODEL="${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}"
-          RAG_SIZE="${RAG_CHUNK_SIZE:-600}"
-          RAG_OVERLAP="${RAG_CHUNK_OVERLAP:-80}"
-
-          require_secret POSTGRES_PASSWORD "${POSTGRES_PASSWORD:-}"
-          require_secret CLIENT_URL "${CLIENT:-}"
-          require_secret ACCESS_TOKEN_SECRET "${ACCESS_TOKEN_SECRET:-}"
-          require_secret REFRESH_TOKEN_SECRET "${REFRESH_TOKEN_SECRET:-}"
-          require_secret GOOGLE_OAUTH_CLIENT_ID "${GOOGLE_OAUTH_CLIENT_ID:-}"
-          require_secret GOOGLE_OAUTH_CLIENT_SECRET "${GOOGLE_OAUTH_CLIENT_SECRET:-}"
-          require_secret OPENAI_API_KEY "${OPENAI_API_KEY:-}"
-          require_secret CORSAIR_KEK "${CORSAIR_KEK:-}"
-          require_secret CORSAIR_WEBHOOK_SECRET "${CORSAIR_WEBHOOK_SECRET:-}"
-          require_secret EXTERNAL_PORT "${EXTERNAL_PORT:-}"
-
-          {
-            printf 'POSTGRES_USER=%s\n' "$PG_USER"
-            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
-            printf 'POSTGRES_DB=%s\n' "$PG_DB"
-            printf 'PORT=8000\n'
-            printf 'NODE_ENV=production\n'
-            printf 'BASE_URL=%s\n' "$BASE"
-            printf 'CLIENT_URL=%s\n' "$CLIENT"
-            printf 'CORS_ORIGIN=%s\n' "$CORS"
-            printf 'DATABASE_URL=%s\n' "$LOCAL_DB"
-            printf 'DATABASE_URL_DIRECT=%s\n' "$LOCAL_DB"
-            printf 'SYNC_DATABASE_URL=%s\n' "${REMOTE_SYNC:-}"
-            printf 'ACCESS_TOKEN_SECRET=%s\n' "$ACCESS_TOKEN_SECRET"
-            printf 'REFRESH_TOKEN_SECRET=%s\n' "$REFRESH_TOKEN_SECRET"
-            printf 'ACCESS_TOKEN_EXPIRY=%s\n' "$TOKEN_ACCESS_EXPIRY"
-            printf 'REFRESH_TOKEN_EXPIRY=%s\n' "$TOKEN_REFRESH_EXPIRY"
-            printf 'GOOGLE_OAUTH_CLIENT_ID=%s\n' "$GOOGLE_OAUTH_CLIENT_ID"
-            printf 'GOOGLE_OAUTH_CLIENT_SECRET=%s\n' "$GOOGLE_OAUTH_CLIENT_SECRET"
-            printf 'GOOGLE_OAUTH_REDIRECT_URI=%s\n' "$GOOGLE_REDIRECT"
-            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
-            printf 'OPENAI_EMBEDDING_MODEL=%s\n' "$EMBEDDING_MODEL"
-            printf 'OPENAI_EMBEDDING_DIMENSIONS=%s\n' "${OPENAI_EMBEDDING_DIMENSIONS:-1536}"
-            printf 'RAG_CHUNK_SIZE=%s\n' "$RAG_SIZE"
-            printf 'RAG_CHUNK_OVERLAP=%s\n' "$RAG_OVERLAP"
-            printf 'PINECONE_API_KEY=%s\n' "${PINECONE_API_KEY:-}"
-            printf 'PINECONE_INDEX=%s\n' "${PINECONE_INDEX:-}"
-            printf 'INNGEST_EVENT_KEY=%s\n' "${INNGEST_EVENT_KEY:-}"
-            printf 'INNGEST_SIGNING_KEY=%s\n' "${INNGEST_SIGNING_KEY:-}"
-            printf 'CORSAIR_KEK=%s\n' "$CORSAIR_KEK"
-            printf 'CORSAIR_GMAIL_REDIRECT_URI=%s\n' "$CORSAIR_GMAIL"
-            printf 'CORSAIR_CALENDAR_REDIRECT_URI=%s\n' "$CORSAIR_CALENDAR"
-            printf 'CORSAIR_CONNECT_REDIRECT_URI=%s\n' "$CORSAIR_CONNECT"
-            printf 'CORSAIR_WEBHOOK_BASE=%s\n' "${CORSAIR_WEBHOOK%/}"
-            printf 'CORSAIR_WEBHOOK_SECRET=%s\n' "$CORSAIR_WEBHOOK_SECRET"
-            printf 'GMAIL_PUBSUB_TOPIC_ID=%s\n' "${GMAIL_PUBSUB_TOPIC_ID:-}"
-            printf 'MEM0_API_KEY=%s\n' "${MEM0_API_KEY:-}"
-            printf 'COOKIE_DOMAIN=%s\n' "${COOKIE_DOMAIN:-}"
-            printf 'LOGGER_LEVEL=%s\n' "${LOGGER_LEVEL:-info}"
-            printf 'PUBLIC_OPENAPI_DOCS=%s\n' "${PUBLIC_OPENAPI_DOCS:-false}"
-            printf 'NEXT_PUBLIC_API_URL=/trpc\n'
-            printf 'API_INTERNAL_URL=http://api:8000\n'
-            printf 'EXTERNAL_PORT=%s\n' "$EXTERNAL_PORT"
-            printf 'API_IMAGE_TAG=%s\n' "${{ github.sha }}"
-            printf 'WEB_IMAGE_TAG=%s\n' "${{ github.sha }}"
-          } > .env.deploy
-          chmod 600 .env.deploy
-
-      - name: Upload compose, nginx, deploy scripts, and env
+      - name: Deploy on home server
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          ssh homeserver "mkdir -p '${DEPLOY_PATH}'"
-          scp docker-compose.deploy.yml "homeserver:${DEPLOY_PATH}/docker-compose.deploy.yml"
-          scp docker/nginx.deploy.conf "homeserver:${DEPLOY_PATH}/nginx.deploy.conf"
-          scp docker/db-sync-entrypoint.sh "homeserver:${DEPLOY_PATH}/db-sync-entrypoint.sh"
-          scp docker/deploy-common.sh "homeserver:${DEPLOY_PATH}/deploy-common.sh"
-          scp docker/deploy-remote.sh "homeserver:${DEPLOY_PATH}/deploy-remote.sh"
-          scp docker/deploy-manual.sh "homeserver:${DEPLOY_PATH}/deploy-manual.sh"
-          scp .env.deploy "homeserver:${DEPLOY_PATH}/.env"
-          ssh homeserver "chmod +x '${DEPLOY_PATH}/db-sync-entrypoint.sh' '${DEPLOY_PATH}/deploy-remote.sh' '${DEPLOY_PATH}/deploy-manual.sh'"
+          ssh homeserver "DEPLOY_PATH='${DEPLOY_PATH}' DEPLOY_SHA='${DEPLOY_SHA}' bash -s" <<'REMOTE'
+          set -euo pipefail
 
-      - name: Deploy on home server (git pull + build on server)
-        env:
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          REPO_ROOT: ${{ secrets.REPO_ROOT }}
-        run: |
-          set -euo pipefail
-          REPO="${REPO_ROOT:-$DEPLOY_PATH}"
-          ssh homeserver \
-            "DEPLOY_PATH='${DEPLOY_PATH}' REPO_ROOT='${REPO}' DEPLOY_SHA='${{ github.sha }}' IMAGE_TAG='${{ github.sha }}' BUILD_ON_SERVER=1 bash -s" <<'REMOTE'
-          set -euo pipefail
-          if [ -d "${REPO_ROOT}/.git" ]; then
-            echo "=== git pull ${REPO_ROOT} ==="
-            cd "${REPO_ROOT}"
-            git fetch origin main
-            git checkout main
-            git pull --ff-only origin main
-          else
-            echo "=== No git repo at REPO_ROOT=${REPO_ROOT} — using existing source tree ==="
-          fi
+          : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
+
+          log() { echo ""; echo "=== $* ==="; }
+
+          log "Deploy preflight (sha=${DEPLOY_SHA})"
           cd "${DEPLOY_PATH}"
-          bash ./deploy-remote.sh
+
+          if [ ! -d .git ]; then
+            echo "No git repo at ${DEPLOY_PATH}"
+            exit 1
+          fi
+
+          if [ ! -f .env ]; then
+            echo "Missing ${DEPLOY_PATH}/.env"
+            exit 1
+          fi
+
+          log "git pull"
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          git log -1 --oneline
+
+          log "install dependencies"
+          pnpm install --frozen-lockfile
+
+          log "build"
+          pnpm build
+
+          log "database migrations"
+          pnpm db:migrate
+
+          log "restart orion"
+          sudo systemctl restart orion
+          sudo systemctl is-active orion
+          sudo systemctl status orion --no-pager -l | head -20
+
+          log "Deploy succeeded (sha=${DEPLOY_SHA})"
           REMOTE
 
-      - name: Dump deploy diagnostics on failure
+      - name: Dump diagnostics on failure
         if: failure()
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          ssh homeserver \
-            "DEPLOY_PATH='${DEPLOY_PATH}' bash -s" <<'REMOTE' || true
+          ssh homeserver "DEPLOY_PATH='${DEPLOY_PATH}' bash -s" <<'REMOTE' || true
           set -uo pipefail
-          cd "$DEPLOY_PATH"
-          COMPOSE_FILE="docker-compose.deploy.yml"
-          ENV_FILE=".env"
-          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps -a 2>/dev/null || true
-          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs api --tail 200 2>/dev/null || true
-          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs migrate 2>/dev/null || true
+          cd "${DEPLOY_PATH:-.}"
+          echo "--- git status ---"
+          git status -sb 2>/dev/null || true
+          echo "--- orion service ---"
+          sudo systemctl status orion --no-pager -l 2>/dev/null | tail -30 || true
+          echo "--- orion logs ---"
+          sudo journalctl -u orion -n 80 --no-pager 2>/dev/null || true
           REMOTE
