@@ -1,123 +1,28 @@
-# Deploy NoClickMail to a home server via SSH (Cloudflare Access).
-# Images are built in CI, saved as tarballs, and transferred over SSH — no registry pull on the server.
+# SSH deploy to home server — builds Docker images ON the server (no CI image transfer).
+#
+# Flow:
+#   1. Manual first deploy on VPS: docker/deploy-manual.sh (see script header)
+#   2. Auto deploy: GitHub Actions → workflow_dispatch → SSH → git pull → deploy-remote.sh
 #
 # Required GitHub repository secrets:
+#   SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, DEPLOY_PATH
+#   CF_SERVICE_TOKEN_ID, CF_SERVICE_TOKEN_SECRET  (Cloudflare Access SSH)
+#   REPO_ROOT  (optional — git clone path on server; defaults to DEPLOY_PATH)
+#   … plus app secrets used to generate .env (see deploy-manual / .env.example)
 #
-#   Deploy / SSH
-#     SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, DEPLOY_PATH
-#     CF_SERVICE_TOKEN_ID, CF_SERVICE_TOKEN_SECRET
-#
-#   Database
-#     DATABASE_URL                       (remote Neon/Postgres — daily sync target)
-#     POSTGRES_PASSWORD                  (local Postgres password, persisted in pg_data volume)
-#
-#   App URLs & auth
-#     CLIENT_URL                         (public URL, e.g. https://orion.example.com)
-#     ACCESS_TOKEN_SECRET, REFRESH_TOKEN_SECRET
-#     GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
-#
-#   OpenAI & RAG (Pinecone ingest pipeline)
-#     OPENAI_API_KEY
-#     PINECONE_API_KEY, PINECONE_INDEX
-#     OPENAI_EMBEDDING_DIMENSIONS          (must match Pinecone index, e.g. 1024 or 1536)
-#     INNGEST_EVENT_KEY, INNGEST_SIGNING_KEY
-#
-#   Corsair (Gmail / Calendar)
-#     CORSAIR_KEK
-#     CORSAIR_WEBHOOK_SECRET
-#     GMAIL_PUBSUB_TOPIC_ID
-#
-#   Docker
-#     EXTERNAL_PORT                      (host port nginx is published on, e.g. 8080)
-#
-# Optional secrets (recommended — have sensible defaults):
-#   DATABASE_URL_DIRECT                  (remote direct URL for sync; defaults to DATABASE_URL)
-#   POSTGRES_USER                        (defaults to postgres)
-#   POSTGRES_DB                          (defaults to noclickmail)
-#   ACCESS_TOKEN_EXPIRY                  (defaults to 1d)
-#   REFRESH_TOKEN_EXPIRY                 (defaults to 30d)
-#   GOOGLE_OAUTH_REDIRECT_URI            (defaults to ${CLIENT_URL}/auth/google/callback)
-#   CORSAIR_GMAIL_REDIRECT_URI           (defaults to ${CLIENT_URL}/dashboard/inbox)
-#   CORSAIR_CALENDAR_REDIRECT_URI        (defaults to ${CLIENT_URL}/dashboard/calendar)
-#   CORSAIR_CONNECT_REDIRECT_URI         (defaults to ${CLIENT_URL}/connect/callback)
-#   CORSAIR_WEBHOOK_BASE                 (defaults to CLIENT_URL)
-#   CORS_ORIGIN                          (defaults to CLIENT_URL)
-#   COOKIE_DOMAIN                        (e.g. .example.com for subdomains)
-#   OPENAI_EMBEDDING_MODEL               (defaults to text-embedding-3-small)
-#   RAG_CHUNK_SIZE                       (defaults to 600)
-#   RAG_CHUNK_OVERLAP                    (defaults to 80)
-#   LOGGER_LEVEL                         (defaults to info)
-#   PUBLIC_OPENAPI_DOCS                  (defaults to false)
-#
-# One-time on the server: ensure Docker + Docker Compose plugin are installed.
+# One-time on the server: Docker, Docker Compose, git clone of this repo.
 
 name: Home Server Deploy
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
-env:
-  API_IMAGE: noclickmail-api:${{ github.sha }}
-  WEB_IMAGE: noclickmail-web:${{ github.sha }}
-
 jobs:
-  build-and-deploy:
-    name: Build, transfer, and deploy
+  ssh-deploy:
+    name: SSH deploy (build on server)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Build API image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile.api
-          load: true
-          tags: |
-            noclickmail-api:latest
-            ${{ env.API_IMAGE }}
-          cache-from: type=gha,scope=noclickmail-api
-          cache-to: type=gha,mode=max,scope=noclickmail-api
-
-      - name: Verify API image runtime dependencies
-        run: |
-          set -euo pipefail
-          echo "=== Migrate script ==="
-          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/migrate.mjs
-          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/dist/scripts/corsair-setup.js
-          docker run --rm "${{ env.API_IMAGE }}" ls -la /app/apps/api/node_modules/pg /app/apps/api/node_modules/drizzle-orm
-
-          echo "=== Bundled API dist (corsair deps are inlined by tsup) ==="
-          docker run --rm "${{ env.API_IMAGE }}" ls -lh /app/apps/api/dist/index.js
-          docker run --rm "${{ env.API_IMAGE }}" sh -c '! grep -q "@corsair-dev/mcp" /app/apps/api/dist/index.js'
-
-          echo "=== Dry-run migrate (expect DATABASE_URL error, not module-not-found) ==="
-          docker run --rm "${{ env.API_IMAGE }}" node /app/apps/api/migrate.mjs 2>&1 | head -20 || true
-
-      - name: Build Web image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile.web
-          load: true
-          build-args: |
-            NEXT_PUBLIC_API_URL=/trpc
-          tags: |
-            noclickmail-web:latest
-            ${{ env.WEB_IMAGE }}
-          cache-from: type=gha,scope=noclickmail-web
-          cache-to: type=gha,mode=max,scope=noclickmail-web
-
-      - name: Export images to tarball
-        run: |
-          set -euo pipefail
-          docker save "${{ env.API_IMAGE }}" "${{ env.WEB_IMAGE }}" | gzip -1 > noclickmail-images.tar.gz
-          ls -lh noclickmail-images.tar.gz
 
       - name: Install cloudflared
         run: |
@@ -148,13 +53,10 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-
           cat > ~/.ssh/config <<EOF
           Host homeserver
             HostName ${SSH_HOST}
@@ -165,7 +67,6 @@ jobs:
             StrictHostKeyChecking accept-new
             ConnectTimeout 30
           EOF
-
           chmod 600 ~/.ssh/config
 
       - name: Create production env file
@@ -204,6 +105,7 @@ jobs:
           EXTERNAL_PORT: ${{ secrets.EXTERNAL_PORT }}
           LOGGER_LEVEL: ${{ secrets.LOGGER_LEVEL }}
           PUBLIC_OPENAPI_DOCS: ${{ secrets.PUBLIC_OPENAPI_DOCS }}
+          MEM0_API_KEY: ${{ secrets.MEM0_API_KEY }}
         run: |
           set -euo pipefail
           umask 077
@@ -242,18 +144,9 @@ jobs:
           require_secret GOOGLE_OAUTH_CLIENT_ID "${GOOGLE_OAUTH_CLIENT_ID:-}"
           require_secret GOOGLE_OAUTH_CLIENT_SECRET "${GOOGLE_OAUTH_CLIENT_SECRET:-}"
           require_secret OPENAI_API_KEY "${OPENAI_API_KEY:-}"
-          require_secret PINECONE_API_KEY "${PINECONE_API_KEY:-}"
-          require_secret PINECONE_INDEX "${PINECONE_INDEX:-}"
-          require_secret OPENAI_EMBEDDING_DIMENSIONS "${OPENAI_EMBEDDING_DIMENSIONS:-}"
-          require_secret INNGEST_EVENT_KEY "${INNGEST_EVENT_KEY:-}"
-          require_secret INNGEST_SIGNING_KEY "${INNGEST_SIGNING_KEY:-}"
           require_secret CORSAIR_KEK "${CORSAIR_KEK:-}"
           require_secret CORSAIR_WEBHOOK_SECRET "${CORSAIR_WEBHOOK_SECRET:-}"
-          require_secret GMAIL_PUBSUB_TOPIC_ID "${GMAIL_PUBSUB_TOPIC_ID:-}"
-          require_secret SYNC_DATABASE_URL "${REMOTE_SYNC:-}"
           require_secret EXTERNAL_PORT "${EXTERNAL_PORT:-}"
-
-          EMBEDDING_DIMENSIONS="${OPENAI_EMBEDDING_DIMENSIONS}"
 
           {
             printf 'POSTGRES_USER=%s\n' "$PG_USER"
@@ -266,7 +159,7 @@ jobs:
             printf 'CORS_ORIGIN=%s\n' "$CORS"
             printf 'DATABASE_URL=%s\n' "$LOCAL_DB"
             printf 'DATABASE_URL_DIRECT=%s\n' "$LOCAL_DB"
-            printf 'SYNC_DATABASE_URL=%s\n' "$REMOTE_SYNC"
+            printf 'SYNC_DATABASE_URL=%s\n' "${REMOTE_SYNC:-}"
             printf 'ACCESS_TOKEN_SECRET=%s\n' "$ACCESS_TOKEN_SECRET"
             printf 'REFRESH_TOKEN_SECRET=%s\n' "$REFRESH_TOKEN_SECRET"
             printf 'ACCESS_TOKEN_EXPIRY=%s\n' "$TOKEN_ACCESS_EXPIRY"
@@ -276,20 +169,21 @@ jobs:
             printf 'GOOGLE_OAUTH_REDIRECT_URI=%s\n' "$GOOGLE_REDIRECT"
             printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
             printf 'OPENAI_EMBEDDING_MODEL=%s\n' "$EMBEDDING_MODEL"
-            printf 'OPENAI_EMBEDDING_DIMENSIONS=%s\n' "$EMBEDDING_DIMENSIONS"
+            printf 'OPENAI_EMBEDDING_DIMENSIONS=%s\n' "${OPENAI_EMBEDDING_DIMENSIONS:-1536}"
             printf 'RAG_CHUNK_SIZE=%s\n' "$RAG_SIZE"
             printf 'RAG_CHUNK_OVERLAP=%s\n' "$RAG_OVERLAP"
-            printf 'PINECONE_API_KEY=%s\n' "$PINECONE_API_KEY"
-            printf 'PINECONE_INDEX=%s\n' "$PINECONE_INDEX"
-            printf 'INNGEST_EVENT_KEY=%s\n' "$INNGEST_EVENT_KEY"
-            printf 'INNGEST_SIGNING_KEY=%s\n' "$INNGEST_SIGNING_KEY"
+            printf 'PINECONE_API_KEY=%s\n' "${PINECONE_API_KEY:-}"
+            printf 'PINECONE_INDEX=%s\n' "${PINECONE_INDEX:-}"
+            printf 'INNGEST_EVENT_KEY=%s\n' "${INNGEST_EVENT_KEY:-}"
+            printf 'INNGEST_SIGNING_KEY=%s\n' "${INNGEST_SIGNING_KEY:-}"
             printf 'CORSAIR_KEK=%s\n' "$CORSAIR_KEK"
             printf 'CORSAIR_GMAIL_REDIRECT_URI=%s\n' "$CORSAIR_GMAIL"
             printf 'CORSAIR_CALENDAR_REDIRECT_URI=%s\n' "$CORSAIR_CALENDAR"
             printf 'CORSAIR_CONNECT_REDIRECT_URI=%s\n' "$CORSAIR_CONNECT"
             printf 'CORSAIR_WEBHOOK_BASE=%s\n' "${CORSAIR_WEBHOOK%/}"
             printf 'CORSAIR_WEBHOOK_SECRET=%s\n' "$CORSAIR_WEBHOOK_SECRET"
-            printf 'GMAIL_PUBSUB_TOPIC_ID=%s\n' "$GMAIL_PUBSUB_TOPIC_ID"
+            printf 'GMAIL_PUBSUB_TOPIC_ID=%s\n' "${GMAIL_PUBSUB_TOPIC_ID:-}"
+            printf 'MEM0_API_KEY=%s\n' "${MEM0_API_KEY:-}"
             printf 'COOKIE_DOMAIN=%s\n' "${COOKIE_DOMAIN:-}"
             printf 'LOGGER_LEVEL=%s\n' "${LOGGER_LEVEL:-info}"
             printf 'PUBLIC_OPENAPI_DOCS=%s\n' "${PUBLIC_OPENAPI_DOCS:-false}"
@@ -301,60 +195,56 @@ jobs:
           } > .env.deploy
           chmod 600 .env.deploy
 
-          echo "=== .env.deploy summary (no secrets) ==="
-          grep -E '^(POSTGRES_USER|POSTGRES_DB|CLIENT_URL|API_IMAGE_TAG|WEB_IMAGE_TAG|EXTERNAL_PORT|NODE_ENV)=' .env.deploy
-          echo "POSTGRES_PASSWORD=<set>"
-          echo "DATABASE_URL=postgresql://${PG_USER}:***@postgres:5432/${PG_DB}"
-          echo "SYNC_DATABASE_URL=<remote neon/hosted url>"
-
-      - name: Upload images, compose, nginx config, and env
+      - name: Upload compose, nginx, deploy scripts, and env
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
           set -euo pipefail
-          echo "=== Uploading to homeserver:${DEPLOY_PATH} ==="
           ssh homeserver "mkdir -p '${DEPLOY_PATH}'"
-          scp noclickmail-images.tar.gz "homeserver:${DEPLOY_PATH}/noclickmail-images.tar.gz"
           scp docker-compose.deploy.yml "homeserver:${DEPLOY_PATH}/docker-compose.deploy.yml"
           scp docker/nginx.deploy.conf "homeserver:${DEPLOY_PATH}/nginx.deploy.conf"
           scp docker/db-sync-entrypoint.sh "homeserver:${DEPLOY_PATH}/db-sync-entrypoint.sh"
+          scp docker/deploy-common.sh "homeserver:${DEPLOY_PATH}/deploy-common.sh"
           scp docker/deploy-remote.sh "homeserver:${DEPLOY_PATH}/deploy-remote.sh"
+          scp docker/deploy-manual.sh "homeserver:${DEPLOY_PATH}/deploy-manual.sh"
           scp .env.deploy "homeserver:${DEPLOY_PATH}/.env"
-          ssh homeserver "chmod +x '${DEPLOY_PATH}/db-sync-entrypoint.sh' '${DEPLOY_PATH}/deploy-remote.sh'"
-          echo "=== Upload complete ==="
+          ssh homeserver "chmod +x '${DEPLOY_PATH}/db-sync-entrypoint.sh' '${DEPLOY_PATH}/deploy-remote.sh' '${DEPLOY_PATH}/deploy-manual.sh'"
 
-      - name: Deploy on home server
+      - name: Deploy on home server (git pull + build on server)
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          REPO_ROOT: ${{ secrets.REPO_ROOT }}
         run: |
+          set -euo pipefail
+          REPO="${REPO_ROOT:-$DEPLOY_PATH}"
           ssh homeserver \
-            "DEPLOY_PATH='${DEPLOY_PATH}' DEPLOY_SHA='${{ github.sha }}' bash -s" \
-            < docker/deploy-remote.sh
+            "DEPLOY_PATH='${DEPLOY_PATH}' REPO_ROOT='${REPO}' DEPLOY_SHA='${{ github.sha }}' IMAGE_TAG='${{ github.sha }}' BUILD_ON_SERVER=1 bash -s" <<'REMOTE'
+          set -euo pipefail
+          if [ -d "${REPO_ROOT}/.git" ]; then
+            echo "=== git pull ${REPO_ROOT} ==="
+            cd "${REPO_ROOT}"
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+          else
+            echo "=== No git repo at REPO_ROOT=${REPO_ROOT} — using existing source tree ==="
+          fi
+          cd "${DEPLOY_PATH}"
+          bash ./deploy-remote.sh
+          REMOTE
 
       - name: Dump deploy diagnostics on failure
         if: failure()
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          echo "=== Deploy failed — collecting remote diagnostics ==="
           ssh homeserver \
             "DEPLOY_PATH='${DEPLOY_PATH}' bash -s" <<'REMOTE' || true
           set -uo pipefail
           cd "$DEPLOY_PATH"
-          echo "=== Last 200 lines of any deploy output saved on server ==="
           COMPOSE_FILE="docker-compose.deploy.yml"
           ENV_FILE=".env"
-          echo "--- docker compose ps -a ---"
           docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps -a 2>/dev/null || true
-          echo "--- migrate logs (full) ---"
-          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs migrate 2>/dev/null || true
-          echo "--- corsair-setup logs (full) ---"
-          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs corsair-setup 2>/dev/null || true
-          echo "--- migrate container inspect ---"
-          MID="$(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps -aq migrate 2>/dev/null | head -1 || true)"
-          if [ -n "$MID" ]; then docker inspect "$MID" 2>/dev/null || true; fi
-          echo "--- api logs (last 200) ---"
           docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs api --tail 200 2>/dev/null || true
-          echo "--- postgres logs (last 100) ---"
-          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs postgres --tail 100 2>/dev/null || true
+          docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs migrate 2>/dev/null || true
           REMOTE

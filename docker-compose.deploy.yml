@@ -1,4 +1,4 @@
-# Production stack for home-server deploy (see .github/workflows/homeserver-deploy.yml).
+# Production stack for home-server deploy (see docker/deploy-manual.sh).
 # App data lives in the local Postgres volume; db-sync pushes a daily backup to SYNC_DATABASE_URL.
 
 services:
