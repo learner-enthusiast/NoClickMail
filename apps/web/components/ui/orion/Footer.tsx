@@ -19,7 +19,9 @@ export function Footer() {
   return (
     <footer id="contact" className="scroll-mt-20 shrink-0 border-t border-border">
       <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-3 px-6 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center">
-        <span className="shrink-0">© {new Date().getFullYear()} Orion · Quiet Intelligence</span>
+        <span className="shrink-0">
+          © {new Date().getFullYear()} Orion · Quiet Intelligence by Arnab
+        </span>
 
         <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 sm:justify-end">
           {LEGAL_LINKS.map(({ label, href }) => (
