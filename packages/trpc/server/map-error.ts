@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { AppError } from "@repo/services/error";
+import { AppError, googleAccessDeniedMessage } from "@repo/services/error";
 
 type ApiErrorLike = {
   code?: number | string;
@@ -45,17 +45,19 @@ export function toTRPCError(err: unknown): TRPCError {
   if (err && typeof err === "object") {
     const apiCode = codeFromApiError(err as ApiErrorLike);
     if (apiCode) {
-      const message = (err as ApiErrorLike).message ?? "Request failed";
+      const message = googleAccessDeniedMessage(err) ?? (err as ApiErrorLike).message ?? "Request failed";
       return new TRPCError({ code: apiCode, message, cause: err });
     }
   }
 
   if (err instanceof Error) {
-    const code = codeFromMessage(err.message) ?? "INTERNAL_SERVER_ERROR";
+    const denied = googleAccessDeniedMessage(err);
+    const code = denied ? "FORBIDDEN" : (codeFromMessage(err.message) ?? "INTERNAL_SERVER_ERROR");
     const message =
-      code === "INTERNAL_SERVER_ERROR" && process.env.NODE_ENV === "production"
+      denied ??
+      (code === "INTERNAL_SERVER_ERROR" && process.env.NODE_ENV === "production"
         ? "Something went wrong"
-        : err.message;
+        : err.message);
     return new TRPCError({ code, message, cause: err });
   }
 

@@ -1,4 +1,5 @@
-import { corsair } from "../corsair";
+import { ensureOAuthAccessToken, withCorsairTenant } from "../corsair";
+import { AppError, httpStatusFromError } from "../error";
 import type {
   ContactSuggestionModelType,
   DeleteMessageInputModelType,
@@ -42,34 +43,60 @@ type MessagePart = {
   parts?: MessagePart[];
 };
 
+const GMAIL_FORBIDDEN_MSG =
+  "Gmail access denied. Open Connections in the header and reconnect Gmail.";
+
+function rethrowGmailError(err: unknown): never {
+  if (err instanceof AppError) throw err;
+  if (httpStatusFromError(err) === 403) {
+    throw new AppError(GMAIL_FORBIDDEN_MSG, "FORBIDDEN", err);
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.toLowerCase().includes("forbidden")) {
+    throw new AppError(GMAIL_FORBIDDEN_MSG, "FORBIDDEN", err);
+  }
+  throw err;
+}
+
+async function withGmail<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    rethrowGmailError(err);
+  }
+}
+
 class GmailService {
-  private gmail(tenantId: string) {
-    return corsair.withTenant(tenantId).gmail.api;
+  private async gmail(tenantId: string) {
+    await ensureOAuthAccessToken(tenantId, "gmail");
+    return withCorsairTenant(tenantId).gmail.api;
   }
   private async listByLabels(
     tenantId: string,
     input: ListMessagesPaginationModelType,
     labelIds: string[],
   ): Promise<ListMessagesOutputModelType> {
-    const gmail = this.gmail(tenantId);
-    const list = await gmail.messages.list({
-      labelIds,
-      maxResults: input.maxResults,
-      pageToken: input.pageToken,
-      q: input.q,
+    return withGmail(async () => {
+      const gmail = await this.gmail(tenantId);
+      const list = await gmail.messages.list({
+        labelIds,
+        maxResults: input.maxResults,
+        pageToken: input.pageToken,
+        q: input.q,
+      });
+      const ids = (list.messages ?? []).map((m) => m.id).filter(Boolean) as string[];
+      const messages = await Promise.all(
+        ids.map(async (id) => {
+          const msg = (await gmail.messages.get({
+            id,
+            format: "full",
+            metadataHeaders: ["From", "To", "Subject", "Date"],
+          })) as GmailMessage;
+          return this.toSummary(msg);
+        }),
+      );
+      return { messages, nextPageToken: list.nextPageToken };
     });
-    const ids = (list.messages ?? []).map((m) => m.id).filter(Boolean) as string[];
-    const messages = await Promise.all(
-      ids.map(async (id) => {
-        const msg = (await gmail.messages.get({
-          id,
-          format: "full",
-          metadataHeaders: ["From", "To", "Subject", "Date"],
-        })) as GmailMessage;
-        return this.toSummary(msg);
-      }),
-    );
-    return { messages, nextPageToken: list.nextPageToken };
   }
 
   async listInbox(
@@ -88,28 +115,32 @@ class GmailService {
     tenantId: string,
     input: GetMessageInputModelType,
   ): Promise<GmailMessageDetailType> {
-    const msg = (await this.gmail(tenantId).messages.get({
-      id: input.id,
-      format: "full",
-    })) as GmailMessage;
+    return withGmail(async () => {
+      const msg = (await (await this.gmail(tenantId)).messages.get({
+        id: input.id,
+        format: "full",
+      })) as GmailMessage;
 
-    const { text, html } = this.extractBody(msg.payload);
-    return {
-      ...this.toSummary(msg),
-      to: this.header(msg, "To"),
-      cc: this.header(msg, "Cc"),
-      bodyText: text,
-      bodyHtml: html,
-    };
+      const { text, html } = this.extractBody(msg.payload);
+      return {
+        ...this.toSummary(msg),
+        to: this.header(msg, "To"),
+        cc: this.header(msg, "Cc"),
+        bodyText: text,
+        bodyHtml: html,
+      };
+    });
   }
 
   async sendMessage(
     tenantId: string,
     input: SendMessageInputModelType,
   ): Promise<SendMessageOutputModelType> {
-    const raw = this.buildRawMessage(input);
-    const sent = (await this.gmail(tenantId).messages.send({ raw })) as GmailMessage;
-    return { id: sent.id ?? "", threadId: sent.threadId ?? "" };
+    return withGmail(async () => {
+      const raw = this.buildRawMessage(input);
+      const sent = (await (await this.gmail(tenantId)).messages.send({ raw })) as GmailMessage;
+      return { id: sent.id ?? "", threadId: sent.threadId ?? "" };
+    });
   }
 
   private toSummary(msg: GmailMessage): GmailMessageSummaryType {
@@ -161,6 +192,7 @@ class GmailService {
 
   private buildRawMessage(input: SendMessageInputModelType): string {
     const message = [
+      "MIME-Version: 1.0",
       `To: ${input.to}`,
       `Subject: ${input.subject}`,
       "Content-Type: text/plain; charset=UTF-8",
@@ -173,7 +205,7 @@ class GmailService {
     tenantId: string,
     input: ListSentContactsInputModelType,
   ): Promise<ListSentContactsOutputModelType> {
-    const gmail = this.gmail(tenantId);
+    const gmail = await this.gmail(tenantId);
 
     const list = await gmail.messages.list({
       labelIds: ["SENT"],
@@ -250,7 +282,7 @@ class GmailService {
     tenantId: string,
     input: ListDraftsInputModelType,
   ): Promise<ListMessagesOutputModelType> {
-    const gmail = this.gmail(tenantId);
+    const gmail = await this.gmail(tenantId);
 
     const list = await gmail.drafts.list({
       maxResults: input.maxResults,
@@ -273,7 +305,7 @@ class GmailService {
     tenantId: string,
     input: DeleteMessageInputModelType,
   ): Promise<DeleteMessageOutputModelType> {
-    const gmail = this.gmail(tenantId);
+    const gmail = await this.gmail(tenantId);
 
     if (input.isDraft) {
       await gmail.drafts.delete({ id: input.id });
@@ -293,7 +325,7 @@ class GmailService {
     tenantId: string,
     input: MarkMessageReadInputModelType,
   ): Promise<MarkMessageReadOutputModelType> {
-    const gmail = this.gmail(tenantId);
+    const gmail = await this.gmail(tenantId);
 
     await gmail.messages.modify({
       id: input.id,
@@ -320,7 +352,7 @@ class GmailService {
     tenantId: string,
     input: RestoreMessageInputModelType,
   ): Promise<RestoreMessageOutputModelType> {
-    const gmail = this.gmail(tenantId);
+    const gmail = await this.gmail(tenantId);
 
     // Removes TRASH; Gmail restores to original folder from remaining labels
     await gmail.messages.untrash({ id: input.id });
@@ -339,7 +371,7 @@ class GmailService {
     };
   }
   async getDraft(tenantId: string, input: GetDraftInputModelType): Promise<GmailDraftDetailType> {
-    const gmail = this.gmail(tenantId);
+    const gmail = await this.gmail(tenantId);
 
     const draft = await gmail.drafts.get({ id: input.id, format: "full" });
     const msg = draft.message as GmailMessage;
@@ -356,33 +388,35 @@ class GmailService {
     };
   }
   async listLabels(tenantId: string): Promise<ListLabelsOutputModelType> {
-    const gmail = this.gmail(tenantId);
-    const res = await gmail.labels.list({});
+    return withGmail(async () => {
+      const gmail = await this.gmail(tenantId);
+      const res = await gmail.labels.list({});
 
-    const labels = await Promise.all(
-      (res.labels ?? []).map(async (l) => {
-        if (!l.id) {
+      const labels = await Promise.all(
+        (res.labels ?? []).map(async (l) => {
+          if (!l.id) {
+            return {
+              id: "",
+              name: l.name ?? "",
+              type: l.type ?? null,
+              messagesTotal: null,
+              messagesUnread: null,
+            };
+          }
+
+          const full = await gmail.labels.get({ id: l.id });
           return {
-            id: "",
-            name: l.name ?? "",
-            type: l.type ?? null,
-            messagesTotal: null,
-            messagesUnread: null,
+            id: full.id ?? l.id,
+            name: full.name ?? l.name ?? "",
+            type: full.type ?? l.type ?? null,
+            messagesTotal: full.messagesTotal ?? null,
+            messagesUnread: full.messagesUnread ?? null,
           };
-        }
+        }),
+      );
 
-        const full = await gmail.labels.get({ id: l.id });
-        return {
-          id: full.id ?? l.id,
-          name: full.name ?? l.name ?? "",
-          type: full.type ?? l.type ?? null,
-          messagesTotal: full.messagesTotal ?? null,
-          messagesUnread: full.messagesUnread ?? null,
-        };
-      }),
-    );
-
-    return { labels };
+      return { labels };
+    });
   }
 
   async listByLabel(

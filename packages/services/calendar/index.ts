@@ -1,4 +1,4 @@
-import { corsair } from "../corsair";
+import { ensureOAuthAccessToken, withCorsairTenant } from "../corsair";
 import type {
   CalendarEventModelType,
   CreateEventInputModelType,
@@ -23,15 +23,17 @@ type CalendarEventRaw = {
 };
 
 class CalendarService {
-  private calendar(tenantId: string) {
-    return corsair.withTenant(tenantId).googlecalendar.api;
+  private async calendar(tenantId: string) {
+    await ensureOAuthAccessToken(tenantId, "googlecalendar");
+    return withCorsairTenant(tenantId).googlecalendar.api;
   }
 
   async listEvents(
     tenantId: string,
     input: ListEventsInputModelType,
   ): Promise<ListEventsOutputModelType> {
-    const res = await this.calendar(tenantId).events.getMany({
+    const calendar = await this.calendar(tenantId);
+    const res = await calendar.events.getMany({
       calendarId: input.calendarId,
       timeMin: input.timeMin,
       timeMax: input.timeMax,
@@ -47,7 +49,7 @@ class CalendarService {
   }
 
   async getEvent(tenantId: string, input: GetEventInputModelType): Promise<CalendarEventModelType> {
-    const e = (await this.calendar(tenantId).events.get({
+    const e = (await (await this.calendar(tenantId)).events.get({
       calendarId: input.calendarId,
       id: input.id,
     })) as CalendarEventRaw;
@@ -58,7 +60,7 @@ class CalendarService {
     tenantId: string,
     input: CreateEventInputModelType,
   ): Promise<CreateEventOutputModelType> {
-    const e = (await this.calendar(tenantId).events.create({
+    const e = (await (await this.calendar(tenantId)).events.create({
       calendarId: input.calendarId,
       event: {
         summary: input.summary,
@@ -76,7 +78,7 @@ class CalendarService {
     tenantId: string,
     input: GetEventInputModelType,
   ): Promise<DeleteEventOutputModelType> {
-    await this.calendar(tenantId).events.delete({
+    await (await this.calendar(tenantId)).events.delete({
       calendarId: input.calendarId,
       id: input.id,
     });

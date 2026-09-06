@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Sparkles,
   FileText,
   PenLine,
   Repeat,
   Send,
-  Paperclip,
-  Image as ImageIcon,
   CalendarPlus,
   Square,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { runAgent, agentThreadMessages, agentThreads } from "~/hooks/agent.ts";
@@ -26,6 +26,7 @@ import CalendarInviteDialog from "../../calendarinvite";
 import { ThinkingBubble } from "./ThinkingBubble";
 import type { AgentStreamEventModelType } from "@repo/trpc/client";
 import type { RagRunMetaModelType } from "@repo/services/rag/model";
+
 const QUICK_ACTIONS = [
   { label: "Summarize", icon: FileText, prompt: "Summarize the key risks in the selected report." },
   { label: "Draft", icon: PenLine, prompt: "Draft a concise response to the selected email." },
@@ -36,7 +37,15 @@ const QUICK_ACTIONS = [
   },
 ] as const;
 
-function Bubble({ role, content }: { role: "user" | "assistant" | "system"; content: string }) {
+function Bubble({
+  role,
+  content,
+  approvalId,
+}: {
+  role: "user" | "assistant" | "system";
+  content: string;
+  approvalId?: string | null;
+}) {
   if (role === "system") return null;
   return (
     <div
@@ -48,6 +57,15 @@ function Bubble({ role, content }: { role: "user" | "assistant" | "system"; cont
       )}
     >
       <p className="whitespace-pre-wrap leading-relaxed">{content}</p>
+      {approvalId && (
+        <Link
+          href={`/approval/${approvalId}`}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          <ExternalLink className="size-3.5" />
+          Review approval
+        </Link>
+      )}
     </div>
   );
 }
@@ -74,6 +92,7 @@ function Transcript({
   pendingUser,
   isBusy,
   streamingAssistant,
+  streamingApprovalId,
   errorMessage,
   scrollRef,
 }: {
@@ -81,6 +100,7 @@ function Transcript({
   pendingUser: string | null;
   isBusy: boolean;
   streamingAssistant: string | null;
+  streamingApprovalId: string | null;
   errorMessage: string | null;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
@@ -94,7 +114,7 @@ function Transcript({
     requestAnimationFrame(() =>
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }),
     );
-  }, [messages, pendingUser, isBusy, streamingAssistant, errorMessage, scrollRef]);
+  }, [messages, pendingUser, isBusy, streamingAssistant, streamingApprovalId, errorMessage, scrollRef]);
 
   const showInitialLoading =
     threadId !== null && isPending && !messages?.length && !showPendingUser && !isBusy;
@@ -108,15 +128,27 @@ function Transcript({
       )}
       {showInitialLoading && <p className="text-sm text-muted-foreground">Loading conversation…</p>}
       {(messages ?? []).map((m) => (
-        <Bubble key={m.id} role={m.role} content={m.content} />
+        <Bubble
+          key={m.id}
+          role={m.role}
+          content={m.content}
+          approvalId={m.approvalId}
+        />
       ))}
       {showPendingUser && pendingUser && <Bubble role="user" content={pendingUser} />}
       {isBusy && !streamingAssistant && <ThinkingBubble />}
-      {streamingAssistant && <Bubble role="assistant" content={streamingAssistant} />}
+      {streamingAssistant && (
+        <Bubble
+          role="assistant"
+          content={streamingAssistant}
+          approvalId={streamingApprovalId}
+        />
+      )}
       {errorMessage && !isBusy && <ErrorBubble message={errorMessage} />}
     </>
   );
 }
+
 function getErrorMessage(e: unknown): string {
   if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
     return e.message;
@@ -138,6 +170,7 @@ function showRagToast(rag: RagRunMetaModelType) {
   toast.message("RAG complete", { description: parts.join(" · ") });
   console.info("[RAG]", rag);
 }
+
 export function Chat() {
   const utils = trpc.useUtils();
   const { mutateAsync, reset, status } = runAgent();
@@ -147,19 +180,18 @@ export function Chat() {
   const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [streamingAssistant, setStreamingAssistant] = useState<string | null>(null);
+  const [streamingApprovalId, setStreamingApprovalId] = useState<string | null>(null);
   const [input, setInput] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isRunning = status === "pending";
-  /** True from the moment Send is clicked until the turn finishes — instant UI feedback. */
   const isBusy = pendingUser !== null || isRunning;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [mention, setMention] = useState<{ query: string; start: number; caret: number } | null>(
     null,
   );
   const [activeIndex, setActiveIndex] = useState(0);
-  // Lazy: fetches once an @-mention begins, then cached (staleTime: Infinity in your QueryClient).
   const { data: contactsData } = gmailSentContacts(
     { maxMessages: 200, limit: 50 },
     mention !== null,
@@ -176,7 +208,7 @@ export function Chat() {
       )
       .slice(0, 6);
   }, [contactsData, mention]);
-  // Restore the most recent thread on first load (optional).
+
   useEffect(() => {
     if (!threadId && threads && threads.length > 0) {
       setThreadId(threads[0]!.id);
@@ -206,11 +238,14 @@ export function Chat() {
       if (event.type === "meta") {
         resolvedThreadId = event.threadId;
         setThreadId(event.threadId);
+      } else if (event.type === "approval_created") {
+        setStreamingApprovalId(event.approvalId);
       } else if (event.type === "delta") {
         setStreamingAssistant((prev) => (prev ?? "") + event.text);
       } else if (event.type === "done") {
         resolvedThreadId = event.threadId;
         setThreadId(event.threadId);
+        if (event.approvalId) setStreamingApprovalId(event.approvalId);
         showRagToast(event.rag);
       }
     }
@@ -224,6 +259,7 @@ export function Chat() {
     if (resolvedThreadId) {
       setPendingUser(null);
       setStreamingAssistant(null);
+      setStreamingApprovalId(null);
       await utils.agent.threadMessages.invalidate({ threadId: resolvedThreadId });
       await utils.agent.threadMessages.refetch({ threadId: resolvedThreadId });
       await utils.agent.listThreads.invalidate();
@@ -240,6 +276,7 @@ export function Chat() {
     setInput("");
     setPendingUser(text);
     setStreamingAssistant(null);
+    setStreamingApprovalId(null);
     setErrorMessage(null);
 
     const activeThreadId = threadId;
@@ -253,6 +290,7 @@ export function Chat() {
           threadId: activeThreadId,
           role: "user" as const,
           content: text,
+          approvalId: null,
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -270,6 +308,7 @@ export function Chat() {
         }
         toast.message("Stopped");
         setStreamingAssistant(null);
+        setStreamingApprovalId(null);
         await syncThreadMessages(activeThreadId);
         setPendingUser(null);
         return;
@@ -279,6 +318,7 @@ export function Chat() {
       const message = getErrorMessage(e);
       setErrorMessage(message);
       setStreamingAssistant(null);
+      setStreamingApprovalId(null);
       toast.error(message);
 
       const syncedId = await syncThreadMessages(activeThreadId);
@@ -301,6 +341,7 @@ export function Chat() {
   function stopGeneration() {
     agentAbort.abort();
     setStreamingAssistant(null);
+    setStreamingApprovalId(null);
     reset();
   }
 
@@ -308,12 +349,12 @@ export function Chat() {
     e.preventDefault();
     send(input);
   }
+
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const value = e.target.value;
     setInput(value);
 
     const caret = e.target.selectionStart ?? value.length;
-    // Match "@query" at the caret, where @ is at start or preceded by whitespace.
     const match = /(?:^|\s)@([^\s@]*)$/.exec(value.slice(0, caret));
     if (match) {
       setMention({ query: match[1] ?? "", start: caret - (match[1]?.length ?? 0) - 1, caret });
@@ -325,19 +366,19 @@ export function Chat() {
 
   function selectContact(email: string) {
     if (!mention) return;
-    const before = input.slice(0, mention.start); // text before the "@"
-    const after = input.slice(mention.caret); // text after what was typed
+    const before = input.slice(0, mention.start);
+    const after = input.slice(mention.caret);
     const next = `${before}@${email} ${after}`;
     setInput(next);
     setMention(null);
 
-    // restore focus + caret after the inserted email
-    const pos = before.length + email.length + 2; // "@" + email + space
+    const pos = before.length + email.length + 2;
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
       textareaRef.current?.setSelectionRange(pos, pos);
     });
   }
+
   return (
     <aside className="flex h-full min-h-0 w-full flex-col border-l border-border bg-sidebar">
       <CalendarInviteDialog
@@ -357,7 +398,6 @@ export function Chat() {
           }
         }}
       />
-      {/* Header */}
       <div className="flex items-center gap-3 border-b border-border px-4 py-4">
         <div className="flex size-9 items-center justify-center rounded-full bg-accent">
           <Sparkles className="size-5 text-accent-foreground" />
@@ -368,19 +408,18 @@ export function Chat() {
         </div>
       </div>
 
-      {/* Transcript */}
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
         <Transcript
           threadId={threadId}
           pendingUser={pendingUser}
           isBusy={isBusy}
           streamingAssistant={streamingAssistant}
+          streamingApprovalId={streamingApprovalId}
           errorMessage={errorMessage}
           scrollRef={scrollRef}
         />
       </div>
 
-      {/* Quick actions */}
       <div className="grid grid-cols-3 gap-2 px-4 pb-2">
         {QUICK_ACTIONS.map(({ label, icon: Icon, prompt }) => (
           <button
@@ -396,11 +435,9 @@ export function Chat() {
         ))}
       </div>
 
-      {/* Composer */}
       <form onSubmit={onSubmit} className="border-t border-border p-3">
         <div className="rounded-xl border border-border bg-background p-2">
           <div className="relative rounded-xl border border-border bg-background p-2">
-            {/* Mention dropdown */}
             {mention && suggestions.length > 0 && (
               <ul className="absolute bottom-full left-0 right-0 mb-2 max-h-56 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-md">
                 {suggestions.map((c, i) => (
@@ -408,7 +445,7 @@ export function Chat() {
                     <button
                       type="button"
                       onMouseDown={(e) => {
-                        e.preventDefault(); // keep textarea focus
+                        e.preventDefault();
                         selectContact(c.email);
                       }}
                       className={cn(
@@ -431,7 +468,6 @@ export function Chat() {
               value={input}
               onChange={handleChange}
               onKeyDown={(e) => {
-                // When the mention box is open, hijack nav keys
                 if (mention && suggestions.length > 0) {
                   if (e.key === "ArrowDown") {
                     e.preventDefault();
@@ -454,7 +490,6 @@ export function Chat() {
                     return;
                   }
                 }
-                // Normal send behavior
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   send(input);

@@ -49,6 +49,7 @@ class ChatService {
     threadId: string;
     role: "user" | "assistant" | "system";
     content: string;
+    approvalId?: string;
   }) {
     await this.getThreadForUser(input.userId, input.threadId);
     const content = input.content.slice(0, MAX_MESSAGE_CHARS);
@@ -59,6 +60,7 @@ class ChatService {
         threadId: input.threadId,
         role: input.role,
         content,
+        approvalId: input.approvalId ?? null,
         tokenEstimate: estimateTokens(content),
       })
       .returning();

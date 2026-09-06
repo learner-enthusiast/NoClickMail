@@ -1,7 +1,8 @@
 import z from "zod";
 import { TRPCError } from "@trpc/server";
 import { agentProcedure, authenticatedProcedure, router } from "../../trpc";
-import { chatService, CorsairAgent, ragService } from "../../services";
+import { chatService, corsairApprovalService, ragService } from "../../services";
+import { formatApprovalCreatedMessage } from "@repo/services/corsair-approvals";
 import { zodUndefinedModel } from "../../schema";
 import { chatThreadModel, chatMessageModel } from "@repo/services/chat/model";
 
@@ -49,21 +50,30 @@ export const agentsRouter = router({
       };
 
       let output = "";
+      let approvalId: string | undefined;
 
       try {
         if (rag.route === "clarify" || rag.route === "direct") {
           output = rag.assistantMessage ?? "";
           if (output) yield { type: "delta" as const, text: output };
         } else if (rag.runCorsairAgent) {
-          for await (const delta of new CorsairAgent(ctx.user).executePromptStream(
-            rag.enhancedPrompt,
-            rag.history,
-            ctx.signal,
-            { enhancedPrompt: rag.enhancedPrompt, retrieved: rag.retrieved },
-          )) {
-            output += delta;
-            yield { type: "delta" as const, text: delta };
-          }
+          const approval = await corsairApprovalService.createFromRag({
+            userId: ctx.user,
+            prompt: input.prompt,
+            threadId: thread.id,
+            messageId: userMsg.id,
+            rag,
+            signal: ctx.signal,
+          });
+
+          approvalId = approval.id;
+          output = formatApprovalCreatedMessage(approval.id);
+
+          yield {
+            type: "approval_created" as const,
+            approvalId: approval.id,
+          };
+          yield { type: "delta" as const, text: output };
         } else {
           output = await ragService.generateAssistantReply(
             {
@@ -89,6 +99,7 @@ export const agentsRouter = router({
         threadId: thread.id,
         role: "assistant",
         content: output,
+        approvalId,
       });
 
       await ragService.storeChatTurn({
@@ -105,6 +116,7 @@ export const agentsRouter = router({
         messageId: assistantMsg.id,
         output,
         rag: rag.meta,
+        approvalId,
       };
     }),
   listThreads: authenticatedProcedure
@@ -129,6 +141,7 @@ export const agentsRouter = router({
         threadId: m.threadId,
         role: m.role,
         content: m.content,
+        approvalId: m.approvalId,
         createdAt: m.createdAt.toISOString(),
       }));
     }),

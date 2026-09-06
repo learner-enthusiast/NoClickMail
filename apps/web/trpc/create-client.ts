@@ -27,7 +27,12 @@ const sharedLinkOptions = {
 
 /** Streaming responses send headers before the procedure finishes — cookies cannot be set/cleared on those requests. */
 function usesStreamingLink(op: { type: string; path: string }) {
-  return op.type === "query" || op.path === "agent.runAgent";
+  return (
+    op.type === "query" ||
+    op.path === "agent.runAgent" ||
+    op.path === "corsairApprovals.approve" ||
+    op.path === "corsairApprovals.retry"
+  );
 }
 
 export const createTRPCHttpBatchClientClient = () =>

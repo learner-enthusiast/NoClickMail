@@ -1,6 +1,6 @@
 import { OpenAIAgentsProvider } from "@corsair-dev/mcp";
 import { Agent, AgentInputItem, run, tool } from "@openai/agents";
-import { corsair } from "../corsair";
+import { ensureOAuthAccessToken, withCorsairTenant } from "../corsair";
 import type { RetrievedChunkModelType } from "../rag/retrieve.model";
 import type { AgentRagContext, PriorTurnModel } from "./agent.model";
 import { extractAgentTextDelta } from "./stream";
@@ -30,6 +30,7 @@ Execute the user's request end-to-end with minimal back-and-forth. Prefer action
 - Search before fetch: use precise queries (from, subject, newer_than, has:attachment, filename) to minimize API calls.
 - When drafting replies: match the user's tone (concise by default), preserve thread context, and produce send-ready text — not bullet summaries of what you would write.
 - Never send, delete, or permanently modify mail without explicit user confirmation in the current request.
+- When calling \`messages.send\`, pass a base64url-encoded RFC 2822 message with To, Subject, Content-Type, and body only — never include a From header (Gmail sets the sender automatically; \`From: me\` is invalid).
 - For attachments, retrieve metadata first; cite filename, sender, and date — not vague descriptions.
 
 ## Calendar behavior
@@ -72,7 +73,7 @@ You are judged on correctness, completion, and brevity — in that order.
   constructor(private readonly tenantId: string) {
     const openAIAgentsProvider = new OpenAIAgentsProvider();
 
-    const tenantScopedCorsairClient = corsair.withTenant(this.tenantId);
+    const tenantScopedCorsairClient = withCorsairTenant(this.tenantId);
 
     const corsairTools = openAIAgentsProvider.build({
       corsair: tenantScopedCorsairClient,
@@ -93,6 +94,13 @@ You are judged on correctness, completion, and brevity — in that order.
     return `\n\n--- Retrieved memory (top ${retrieved.length}) ---\n${lines.join("\n")}\n--- End retrieved memory ---\n`;
   }
 
+  private async ensureGoogleTokensFresh() {
+    await Promise.all([
+      ensureOAuthAccessToken(this.tenantId, "gmail"),
+      ensureOAuthAccessToken(this.tenantId, "googlecalendar"),
+    ]);
+  }
+
   async executePrompt(
     userPrompt: string,
     history: PriorTurn[] = [],
@@ -102,6 +110,8 @@ You are judged on correctness, completion, and brevity — in that order.
     if (signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
     }
+
+    await this.ensureGoogleTokensFresh();
 
     const effectivePrompt = rag?.enhancedPrompt ?? userPrompt;
     const ragBlock = rag?.retrieved ? this.formatRagBlock(rag.retrieved) : "";
@@ -135,6 +145,8 @@ You are judged on correctness, completion, and brevity — in that order.
     if (signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
     }
+
+    await this.ensureGoogleTokensFresh();
 
     const effectivePrompt = rag?.enhancedPrompt ?? userPrompt;
     const ragBlock = rag?.retrieved ? this.formatRagBlock(rag.retrieved) : "";

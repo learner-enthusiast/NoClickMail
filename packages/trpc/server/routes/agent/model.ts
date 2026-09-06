@@ -7,6 +7,11 @@ export const agentStreamMetaEventModel = z.object({
   rag: ragRunMetaModel,
 });
 
+export const agentStreamApprovalCreatedEventModel = z.object({
+  type: z.literal("approval_created"),
+  approvalId: z.string().uuid(),
+});
+
 export const agentStreamDeltaEventModel = z.object({
   type: z.literal("delta"),
   text: z.string(),
@@ -15,12 +20,15 @@ export const agentStreamDeltaEventModel = z.object({
 export const agentStreamDoneEventModel = z.object({
   type: z.literal("done"),
   threadId: z.string().uuid(),
+  messageId: z.string().uuid().optional(),
   output: z.string(),
   rag: ragRunMetaModel,
+  approvalId: z.string().uuid().optional(),
 });
 
 export const agentStreamEventModel = z.discriminatedUnion("type", [
   agentStreamMetaEventModel,
+  agentStreamApprovalCreatedEventModel,
   agentStreamDeltaEventModel,
   agentStreamDoneEventModel,
 ]);

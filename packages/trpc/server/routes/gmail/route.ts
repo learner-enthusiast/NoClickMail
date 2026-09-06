@@ -31,6 +31,15 @@ import { zodUndefinedModel } from "../../schema";
 const TAGS = ["Gmail"];
 const getPath = generatePath("/gmail");
 
+/**
+ * Gmail tRPC routes — direct dashboard access via Corsair/Gmail API.
+ *
+ * Agent-initiated writes (send, draft, etc.) from chat go through the approval flow
+ * (`/approval/:id`), not through blocking these routes.
+ *
+ * If you see "Forbidden", Gmail is disconnected or the OAuth token expired —
+ * reconnect via the Connections menu (header refresh icon).
+ */
 export const gmailRouter = router({
   inbox: authenticatedProcedure
     .meta({ openapi: { method: "GET", path: getPath("/inbox"), tags: TAGS } })
@@ -48,7 +57,7 @@ export const gmailRouter = router({
     .meta({ openapi: { method: "POST", path: getPath("/send"), tags: TAGS } })
     .input(sendMessageInputModel)
     .output(sendMessageOutputModel)
-    .mutation(({ ctx, input }) => gmailService.sendMessage(ctx.user, input)), // packages/trpc/server/routes/gmail/route.ts
+    .mutation(({ ctx, input }) => gmailService.sendMessage(ctx.user, input)),
   sentContacts: authenticatedProcedure
     .meta({ openapi: { method: "GET", path: getPath("/sent-contacts"), tags: TAGS } })
     .input(listSentContactsInputModel)

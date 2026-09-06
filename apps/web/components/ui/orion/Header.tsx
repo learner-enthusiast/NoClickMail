@@ -15,7 +15,10 @@ import { connectionStatus } from "~/hooks/connections";
 import { env } from "~/env";
 import { OrionLogo } from "./OrionLogo";
 
-const NAV_ITEMS = [{ label: "Dashboard", href: "dashboard/inbox" }] as const;
+const NAV_ITEMS = [
+  { label: "Dashboard", href: "/dashboard/inbox" },
+  { label: "Approvals", href: "/approvals" },
+] as const;
 const API_BASE = (env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/trpc").replace(
   /\/trpc\/?$/,
   "",
@@ -197,14 +200,15 @@ export function Header() {
 
         {/* Center — nav (authenticated only) */}
 
-        {isRoot && DASHBOARD_ITEMS.length > 0 && <LandingNav />}
-        {/* 
+        {isRoot && !isAuthenticated && DASHBOARD_ITEMS.length > 0 && <LandingNav />}
+
         {isAuthenticated && (
           <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-10 md:flex">
-            {NAV_ITEMS.length > 0 &&
-              NAV_ITEMS.map((item) => <NavLink key={item?.href} {...item} />)}
+            {NAV_ITEMS.map((item) => (
+              <NavLink key={item.href} {...item} />
+            ))}
           </nav>
-        )} */}
+        )}
 
         {/* Right — actions */}
         <div className="flex items-center gap-1">
