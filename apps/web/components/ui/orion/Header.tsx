@@ -17,6 +17,7 @@ import { OrionLogo } from "./OrionLogo";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard/inbox" },
+  { label: "Chat", href: "/chat" },
   { label: "Approvals", href: "/approvals" },
 ] as const;
 const API_BASE = (env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/trpc").replace(
