@@ -15,11 +15,17 @@ import { connectionStatus } from "~/hooks/connections";
 import { env } from "~/env";
 import { OrionLogo } from "./OrionLogo";
 
-const NAV_ITEMS = [
+const ALL_NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard/inbox" },
   { label: "Chat", href: "/chat" },
   { label: "Approvals", href: "/approvals" },
 ] as const;
+
+const isProd = process.env.NODE_ENV === "production";
+
+const NAV_ITEMS = ALL_NAV_ITEMS.filter(
+  (item) => !(isProd && item.href === "/chat"),
+);
 const API_BASE = (env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/trpc").replace(
   /\/trpc\/?$/,
   "",
@@ -42,6 +48,41 @@ const CONNECTION_ITEMS = [
   { id: "gmail", label: "Gmail", icon: Mail },
   { id: "googlecalendar", label: "Google Calendar", icon: Calendar },
 ] as const;
+
+function ConnectionStatusAction({
+  isPending,
+  connected,
+  onConnect,
+}: {
+  isPending: boolean;
+  connected: boolean;
+  onConnect: () => void;
+}) {
+  if (isPending) {
+    return <span className="text-xs text-muted-foreground">Checking…</span>;
+  }
+
+  if (connected) {
+    return (
+      <span className="flex items-center gap-1 rounded-full bg-chart-5/10 px-2 py-1 text-xs font-medium text-chart-5">
+        <Check className="size-3" />
+        Connected
+      </span>
+    );
+  }
+
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-7 rounded-full px-3 text-xs"
+      onClick={onConnect}
+    >
+      Connect
+    </Button>
+  );
+}
+
 function ConnectionsDropdown() {
   const { data, isPending } = connectionStatus();
 
@@ -87,23 +128,11 @@ function ConnectionsDropdown() {
                   {label}
                 </span>
 
-                {isPending ? (
-                  <span className="text-xs text-muted-foreground">Checking…</span>
-                ) : connected ? (
-                  <span className="flex items-center gap-1 rounded-full bg-chart-5/10 px-2 py-1 text-xs font-medium text-chart-5">
-                    <Check className="size-3" />
-                    Connected
-                  </span>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 rounded-full px-3 text-xs"
-                    onClick={() => connect(id)}
-                  >
-                    Connect
-                  </Button>
-                )}
+                <ConnectionStatusAction
+                  isPending={isPending}
+                  connected={connected}
+                  onConnect={() => connect(id)}
+                />
               </div>
             );
           })}

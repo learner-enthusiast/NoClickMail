@@ -9,6 +9,7 @@
 #   - production .env at repo root (not committed)
 #   - pnpm install && pnpm build
 #   - systemd unit: orion (e.g. WorkingDirectory=DEPLOY_PATH, ExecStart=pnpm start)
+#   - passwordless sudo for deploy user — see deploy/orion-deploy.sudoers.example
 
 name: Home Server Deploy
 
@@ -110,9 +111,7 @@ jobs:
           pnpm db:migrate
 
           log "restart orion"
-          systemctl restart orion
-          systemctl is-active orion
-          systemctl status orion --no-pager -l | head -20
+          bash scripts/restart-orion.sh
 
           log "Deploy succeeded (sha=${DEPLOY_SHA})"
           REMOTE
