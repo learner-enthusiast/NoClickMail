@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import {
   Sparkles,
   FileText,
@@ -10,7 +9,6 @@ import {
   Send,
   CalendarPlus,
   Square,
-  ExternalLink,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { runAgent, agentThreadMessages, agentThreads } from "~/hooks/agent.ts";
@@ -24,6 +22,7 @@ import { createCalendarEvent } from "~/hooks/calendar";
 import { toast } from "sonner";
 import CalendarInviteDialog from "../../calendarinvite";
 import { ThinkingBubble } from "./ThinkingBubble";
+import { ChatErrorBubble, ChatMessageBubble } from "./ChatMessageBubble";
 import type { AgentStreamEventModelType } from "@repo/trpc/client";
 import type { RagRunMetaModelType } from "@repo/services/rag/model";
 
@@ -36,47 +35,6 @@ const QUICK_ACTIONS = [
     prompt: "Rewrite the selected text to be clearer and more professional.",
   },
 ] as const;
-
-function Bubble({
-  role,
-  content,
-  approvalId,
-}: {
-  role: "user" | "assistant" | "system";
-  content: string;
-  approvalId?: string | null;
-}) {
-  if (role === "system") return null;
-  return (
-    <div
-      className={cn(
-        "max-w-[85%] px-4 py-3 text-sm",
-        role === "user"
-          ? "ml-auto rounded-2xl rounded-tr-sm bg-primary text-primary-foreground"
-          : "mr-auto rounded-2xl rounded-tl-sm bg-secondary text-foreground",
-      )}
-    >
-      <p className="whitespace-pre-wrap leading-relaxed">{content}</p>
-      {approvalId && (
-        <Link
-          href={`/approval/${approvalId}`}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          <ExternalLink className="size-3.5" />
-          Review approval
-        </Link>
-      )}
-    </div>
-  );
-}
-
-function ErrorBubble({ message }: { message: string }) {
-  return (
-    <div className="mr-auto max-w-[85%] rounded-2xl rounded-tl-sm border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-      <p className="whitespace-pre-wrap leading-relaxed">{message}</p>
-    </div>
-  );
-}
 
 function pendingUserVisible(
   pendingUser: string | null,
@@ -127,24 +85,30 @@ function Transcript({
         </div>
       )}
       {showInitialLoading && <p className="text-sm text-muted-foreground">Loading conversation…</p>}
-      {(messages ?? []).map((m) => (
-        <Bubble
-          key={m.id}
-          role={m.role}
-          content={m.content}
-          approvalId={m.approvalId}
-        />
-      ))}
-      {showPendingUser && pendingUser && <Bubble role="user" content={pendingUser} />}
+      {(messages ?? [])
+        .filter((m): m is typeof m & { role: "user" | "assistant" } =>
+          m.role === "user" || m.role === "assistant",
+        )
+        .map((m) => (
+          <ChatMessageBubble
+            key={m.id}
+            role={m.role}
+            content={m.content}
+            approvalId={m.approvalId}
+          />
+        ))}
+      {showPendingUser && pendingUser && (
+        <ChatMessageBubble role="user" content={pendingUser} />
+      )}
       {isBusy && !streamingAssistant && <ThinkingBubble />}
       {streamingAssistant && (
-        <Bubble
+        <ChatMessageBubble
           role="assistant"
           content={streamingAssistant}
           approvalId={streamingApprovalId}
         />
       )}
-      {errorMessage && !isBusy && <ErrorBubble message={errorMessage} />}
+      {errorMessage && !isBusy && <ChatErrorBubble message={errorMessage} />}
     </>
   );
 }

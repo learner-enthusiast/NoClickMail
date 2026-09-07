@@ -12,7 +12,11 @@ import {
   planCorsairActionFromRag,
   compactPlannedParameters,
   ensureExecutablePlannedAction,
+  requiresCorsairApproval,
+  type PlannedCorsairAction,
 } from "./planner";
+
+export { requiresCorsairApproval } from "./planner";
 import { formatApprovalExecutionForChat } from "./format-chat";
 import { executeApprovedCorsairEventStream } from "./execute";
 import type {
@@ -198,21 +202,37 @@ class CorsairApprovalService {
     return this.listPaginatedByStatusForUser(userId, "failed", input);
   }
 
-  async createFromRag(input: {
-    userId: string;
+  async planFromRag(input: {
+    prompt: string;
+    rag: RagRunResultModelType;
+    signal?: AbortSignal;
+  }) {
+    const rawPlanned = await planCorsairActionFromRag(input);
+    const planned = ensureExecutablePlannedAction(rawPlanned);
+    return {
+      rawPlanned,
+      planned,
+      requiresApproval: requiresCorsairApproval(planned, rawPlanned),
+    };
+  }
+
+  buildParametersForRag(input: {
     prompt: string;
     threadId: string;
     messageId: string;
     rag: RagRunResultModelType;
-    signal?: AbortSignal;
+    planned: PlannedCorsairAction;
   }) {
-    const rawPlanned = await planCorsairActionFromRag({
-      prompt: input.prompt,
-      rag: input.rag,
-      signal: input.signal,
-    });
-    const planned = ensureExecutablePlannedAction(rawPlanned);
+    return this.buildApprovalParameters(input);
+  }
 
+  private buildApprovalParameters(input: {
+    prompt: string;
+    threadId: string;
+    messageId: string;
+    rag: RagRunResultModelType;
+    planned: PlannedCorsairAction;
+  }) {
     const agentContext: CorsairAgentExecutionParameters = {
       prompt: input.prompt,
       enhancedPrompt: input.rag.enhancedPrompt,
@@ -222,33 +242,68 @@ class CorsairApprovalService {
       retrieved: input.rag.retrieved,
     };
 
-    const parameters =
-      planned.action === corsairAgentExecuteAction
-        ? agentContext
-        : {
-            ...compactPlannedParameters(planned.parameters),
-            threadId: input.threadId,
-            messageId: input.messageId,
-            prompt: input.prompt,
-            agentContext,
-          };
+    return input.planned.action === corsairAgentExecuteAction
+      ? agentContext
+      : {
+          ...compactPlannedParameters(input.planned.parameters),
+          threadId: input.threadId,
+          messageId: input.messageId,
+          prompt: input.prompt,
+          agentContext,
+        };
+  }
 
+  async createFromPlanned(input: {
+    userId: string;
+    planned: PlannedCorsairAction;
+    parameters: CorsairEvent["parameters"];
+  }) {
     const [row] = await db
       .insert(corsairApprovalEvents)
       .values({
         userId: input.userId,
-        service: planned.service,
-        action: planned.action,
+        service: input.planned.service,
+        action: input.planned.action,
         status: "pending",
-        riskLevel: planned.riskLevel,
-        title: planned.title,
-        description: planned.description,
-        parameters,
+        riskLevel: input.planned.riskLevel,
+        title: input.planned.title,
+        description: input.planned.description,
+        parameters: input.parameters,
+        requiresApproval: true,
         expiresAt: new Date(Date.now() + APPROVAL_TTL_MS),
       })
       .returning();
 
     return row!;
+  }
+
+  async createFromRag(input: {
+    userId: string;
+    prompt: string;
+    threadId: string;
+    messageId: string;
+    rag: RagRunResultModelType;
+    signal?: AbortSignal;
+  }) {
+    const { planned } = await this.planFromRag({
+      prompt: input.prompt,
+      rag: input.rag,
+      signal: input.signal,
+    });
+
+    const parameters = this.buildApprovalParameters({
+      prompt: input.prompt,
+      threadId: input.threadId,
+      messageId: input.messageId,
+      rag: input.rag,
+      planned,
+    });
+
+    return this.createFromPlanned({
+      userId: input.userId,
+      planned,
+      parameters,
+    });
   }
 
   private async assertExecutable(approval: CorsairEvent) {

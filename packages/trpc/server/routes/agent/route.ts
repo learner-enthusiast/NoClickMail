@@ -1,10 +1,10 @@
 import z from "zod";
 import { TRPCError } from "@trpc/server";
 import { agentProcedure, authenticatedProcedure, router } from "../../trpc";
-import { chatService, corsairApprovalService, ragService } from "../../services";
-import { formatApprovalCreatedMessage } from "@repo/services/corsair-approvals";
+import { chatService, ragService } from "../../services";
 import { zodUndefinedModel } from "../../schema";
 import { chatThreadModel, chatMessageModel } from "@repo/services/chat/model";
+import { executeAgentTurn } from "./run-agent-stream";
 
 function assertNotAborted(signal: AbortSignal) {
   if (signal.aborted) {
@@ -49,48 +49,14 @@ export const agentsRouter = router({
         rag: rag.meta,
       };
 
-      let output = "";
-      let approvalId: string | undefined;
-
-      try {
-        if (rag.route === "clarify" || rag.route === "direct") {
-          output = rag.assistantMessage ?? "";
-          if (output) yield { type: "delta" as const, text: output };
-        } else if (rag.runCorsairAgent) {
-          const approval = await corsairApprovalService.createFromRag({
-            userId: ctx.user,
-            prompt: input.prompt,
-            threadId: thread.id,
-            messageId: userMsg.id,
-            rag,
-            signal: ctx.signal,
-          });
-
-          approvalId = approval.id;
-          output = formatApprovalCreatedMessage(approval.id);
-
-          yield {
-            type: "approval_created" as const,
-            approvalId: approval.id,
-          };
-          yield { type: "delta" as const, text: output };
-        } else {
-          output = await ragService.generateAssistantReply(
-            {
-              prompt: rag.enhancedPrompt,
-              history: rag.history,
-              longTermMemories: rag.longTermMemories,
-            },
-            ctx.signal,
-          );
-          if (output) yield { type: "delta" as const, text: output };
-        }
-      } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") {
-          throw new TRPCError({ code: "CLIENT_CLOSED_REQUEST", message: "Request aborted" });
-        }
-        throw e;
-      }
+      const { output, approvalId } = yield* executeAgentTurn({
+        userId: ctx.user,
+        prompt: input.prompt,
+        threadId: thread.id,
+        messageId: userMsg.id,
+        rag,
+        signal: ctx.signal,
+      });
 
       assertNotAborted(ctx.signal);
 

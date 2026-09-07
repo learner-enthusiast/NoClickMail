@@ -117,6 +117,26 @@ export function ensureExecutablePlannedAction(
   return planned;
 }
 
+const CALENDAR_APPROVAL_ACTIONS = new Set(["create", "update", "delete"]);
+
+/** Whether a planned Corsair action must go through the approval flow before running. */
+export function requiresCorsairApproval(
+  planned: PlannedCorsairAction,
+  rawPlanned?: PlannedCorsairAction,
+): boolean {
+  const source = rawPlanned ?? planned;
+
+  if (source.service === "gmail") {
+    return source.action === "send" || source.action === "reply";
+  }
+
+  if (source.service === "google_calendar") {
+    return CALENDAR_APPROVAL_ACTIONS.has(source.action);
+  }
+
+  return false;
+}
+
 /** Drop nulls so execution only sees concrete values. */
 export function compactPlannedParameters(
   parameters: z.infer<typeof plannedParametersModel>,
@@ -140,9 +160,9 @@ export function compactPlannedParameters(
 
 const PLANNER_MODEL = "gpt-4o-mini";
 
-const PLANNER_SYSTEM = `You plan Corsair approval requests for Orion — an executive assistant with Gmail and Google Calendar access.
+const PLANNER_SYSTEM = `You plan Corsair actions for Orion — an executive assistant with Gmail and Google Calendar access.
 
-Given the user's chat request and RAG context, output a single planned action that will run ONLY after the user approves it on /approval/:id.
+Given the user's chat request and RAG context, output a single planned action.
 
 Rules:
 - service: "gmail" for email tasks, "google_calendar" for calendar/scheduling tasks
@@ -155,7 +175,8 @@ Rules:
 - if you cannot determine to, subject, and body for an email, use action agent_execute instead of send
 - riskLevel: high for send/delete/forward; medium for create/update/draft; low for search/read/check_availability
 - title: short user-facing summary (max 80 chars)
-- description: one sentence explaining what will happen after approval`;
+- description: one sentence explaining what will happen when the action runs
+- approval is required only for gmail send/reply and calendar create/update/delete; read/search/draft actions run immediately`;
 
 function plannerJsonSchema() {
   const dateTimeField = {
