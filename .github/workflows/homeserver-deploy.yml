@@ -110,9 +110,9 @@ jobs:
           pnpm db:migrate
 
           log "restart orion"
-          sudo systemctl restart orion
-          sudo systemctl is-active orion
-          sudo systemctl status orion --no-pager -l | head -20
+          systemctl restart orion
+          systemctl is-active orion
+          systemctl status orion --no-pager -l | head -20
 
           log "Deploy succeeded (sha=${DEPLOY_SHA})"
           REMOTE
