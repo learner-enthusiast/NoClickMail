@@ -7,12 +7,10 @@ import {
   defaultCookieOptions,
 } from "@repo/trpc/server/cookie";
 
-import { env as serviceEnv } from "../../../../packages/services/env";
-
+import { env as serviceEnv, googleOAuth2Client } from "@repo/services";
 import { env as apiEnv } from "../env";
-import { usersTable } from "../../../../packages/database/models/user";
-import { googleOAuth2Client } from "../../../../packages/services/clients/google-oauth";
-import db, { and, eq } from "../../../../packages/database";
+import { usersTable } from "@repo/database/models/user";
+import db, { and, eq } from "@repo/database";
 
 export const googleAuthRouter = Router();
 

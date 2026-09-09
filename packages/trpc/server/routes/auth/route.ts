@@ -1,6 +1,6 @@
 import { userService } from "../../services";
 import * as JWT from "jsonwebtoken";
-import { env } from "@repo/services/env";
+import { env } from "@repo/services";
 import {
   logoutUserOutputModel,
   refreshTokenInputModel,
@@ -8,7 +8,7 @@ import {
   getMeOutputModel,
   getAuthenticationMethodOutputSchema,
   type GenerateUSerTokenPayload,
-} from "@repo/services/user/model";
+} from "@repo/services/model";
 import {
   authenticatedProcedure,
   csrfProcedure,

@@ -1,8 +1,7 @@
 import { setupCorsair } from "corsair/setup";
 import { createIntegrationKeyManager } from "corsair/core";
 import { createCorsairDatabase } from "corsair/db";
-import { corsair, pool } from "@repo/services/corsair";
-import { env as serviceEnv } from "@repo/services/env";
+import { corsair, env as serviceEnv, pool } from "@repo/services";
 
 const database = createCorsairDatabase(pool);
 

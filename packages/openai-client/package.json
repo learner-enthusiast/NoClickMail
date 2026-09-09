@@ -1,0 +1,14 @@
+{
+  "name": "@repo/openai-client",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@repo/env": "workspace:*", "@repo/error": "workspace:*", "zod": "^4.3.5"
+  }
+}

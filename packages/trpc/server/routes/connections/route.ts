@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getCorsairConnectionStatus } from "@repo/services/corsair";
+import { getCorsairConnectionStatus } from "@repo/services";
 import { authenticatedProcedure, router } from "../../trpc";
 import { zodUndefinedModel } from "../../schema";
 import { generatePath } from "../../utils/path-generator";

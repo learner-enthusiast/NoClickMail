@@ -24,7 +24,7 @@ import CalendarInviteDialog from "../../calendarinvite";
 import { ThinkingBubble } from "./ThinkingBubble";
 import { ChatErrorBubble, ChatMessageBubble } from "./ChatMessageBubble";
 import type { AgentStreamEventModelType } from "@repo/trpc/client";
-import type { RagRunMetaModelType } from "@repo/services/rag/model";
+import type { RagRunMetaModelType } from "@repo/services/model";
 
 const QUICK_ACTIONS = [
   { label: "Summarize", icon: FileText, prompt: "Summarize the key risks in the selected report." },

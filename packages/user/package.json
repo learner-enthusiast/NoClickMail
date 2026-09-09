@@ -1,0 +1,20 @@
+{
+  "name": "@repo/user",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "typescript": "^5.9.3",
+    "@types/jsonwebtoken": "^9.0.10"
+  },
+  "dependencies": {
+    "@repo/env": "workspace:*",
+    "@repo/clients": "workspace:*",
+    "@repo/error": "workspace:*",
+    "@repo/database": "workspace:*",
+    "jsonwebtoken": "^9.0.3",
+    "zod": "^4.3.5"
+  }
+}

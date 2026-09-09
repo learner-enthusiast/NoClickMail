@@ -7,7 +7,7 @@ import {
   corsairApprovalListPaginationInputModel,
   corsairApprovalModel,
   corsairApprovalPaginatedListOutputModel,
-} from "@repo/services/corsair-approvals/model";
+} from "@repo/services/model";
 
 function assertNotAborted(signal: AbortSignal) {
   if (signal.aborted) {

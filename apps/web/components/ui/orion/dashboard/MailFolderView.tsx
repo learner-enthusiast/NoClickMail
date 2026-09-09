@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { GmailMessageSummaryType } from "@repo/services/gmail/model";
+import type { GmailMessageSummaryType } from "@repo/services/model";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 import { PairedRevolution } from "../PairedRevolution";
 import { MailMessageList } from "./MailMessageList";

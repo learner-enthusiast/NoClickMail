@@ -8,7 +8,7 @@ import {
   getEventInputModel,
   listEventsInputModel,
   listEventsOutputModel,
-} from "@repo/services/calendar/model";
+} from "@repo/services/model";
 import { authenticatedProcedure, csrfProtectedProcedure, router } from "../../trpc";
 import { generatePath } from "../../utils/path-generator";
 

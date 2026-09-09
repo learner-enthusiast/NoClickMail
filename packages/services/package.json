@@ -5,24 +5,27 @@
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.15.3",
     "dotenv-cli": "^11.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@corsair-dev/gmail": "^0.1.4",
-    "@corsair-dev/googlecalendar": "^0.1.4",
-    "@corsair-dev/mcp": "^0.1.22",
-    "@openai/agents": "^0.11.6",
-    "@repo/database": "workspace:*",
-    "@repo/logger": "workspace:*",
-    "@trpc/server": "^11.8.1",
-    "corsair": "^0.1.76",
-    "google-auth-library": "^10.5.0",
-    "inngest": "^4.13.0",
-    "jsonwebtoken": "^9.0.3",
-    "zod": "^4.3.5"
+    "@repo/calendar": "workspace:*",
+    "@repo/chat": "workspace:*",
+    "@repo/clients": "workspace:*",
+    "@repo/corsair": "workspace:*",
+    "@repo/corsair-agent": "workspace:*",
+    "@repo/corsair-approvals": "workspace:*",
+    "@repo/env": "workspace:*",
+    "@repo/error": "workspace:*",
+    "@repo/filesavemodule": "workspace:*",
+    "@repo/gmail": "workspace:*",
+    "@repo/inngest": "workspace:*",
+    "@repo/openai-client": "workspace:*",
+    "@repo/rag": "workspace:*",
+    "@repo/rag-models": "workspace:*",
+    "@repo/user": "workspace:*",
+    "@repo/webhooks": "workspace:*"
   }
 }

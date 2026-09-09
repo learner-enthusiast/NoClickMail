@@ -23,7 +23,7 @@ import {
   restoreMessageOutputModel,
   sendMessageInputModel,
   sendMessageOutputModel,
-} from "@repo/services/gmail/model";
+} from "@repo/services/model";
 import { authenticatedProcedure, csrfProtectedProcedure, router } from "../../trpc";
 import { generatePath } from "../../utils/path-generator";
 import { zodUndefinedModel } from "../../schema";

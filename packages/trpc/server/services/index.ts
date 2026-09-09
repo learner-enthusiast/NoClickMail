@@ -1,14 +1,17 @@
-import UserService from "@repo/services/user";
-import GmailService from "@repo/services/gmail";
-import CalendarService from "@repo/services/calendar";
-import RunCorsairAgent from "@repo/services/open-ai_SDK";
-import ChatService from "@repo/services/chat";
-import RagService from "@repo/services/rag";
-import CorsairApprovalService from "@repo/services/corsair-approvals";
+import {
+  CalendarService,
+  ChatService,
+  CorsairAgent,
+  CorsairApprovalService,
+  GmailService,
+  RagService,
+  UserService,
+} from "@repo/services";
+
 export const userService = new UserService();
 export const gmailService = new GmailService();
 export const calendarService = new CalendarService();
-export const CorsairAgent = RunCorsairAgent;
+export { CorsairAgent };
 export const chatService = new ChatService();
 export const ragService = new RagService();
 export const corsairApprovalService = new CorsairApprovalService();

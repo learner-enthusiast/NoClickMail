@@ -1,0 +1,14 @@
+{
+  "name": "@repo/corsair-approvals",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@repo/gmail": "workspace:*", "@repo/calendar": "workspace:*", "@repo/rag-models": "workspace:*", "@repo/corsair-agent": "workspace:*", "@repo/openai-client": "workspace:*", "@repo/error": "workspace:*", "@repo/database": "workspace:*", "zod": "^4.3.5"
+  }
+}

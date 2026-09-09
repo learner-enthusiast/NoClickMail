@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ragRunMetaModel } from "@repo/services/rag/model";
+import { ragRunMetaModel } from "@repo/services/model";
 
 export const agentStreamMetaEventModel = z.object({
   type: z.literal("meta"),

@@ -1,6 +1,6 @@
 import { CookieOptions, Request, Response } from "express";
 import { TRPCContext } from "./context";
-import { env } from "@repo/services/env";
+import { env } from "@repo/services";
 
 const ONE_MINUTE = 60 * 1000;
 const ONE_HOUR = 60 * ONE_MINUTE;

@@ -1,0 +1,14 @@
+{
+  "name": "@repo/webhooks",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "google-auth-library": "^10.5.0"
+  }
+}

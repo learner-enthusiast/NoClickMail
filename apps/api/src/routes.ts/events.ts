@@ -1,6 +1,6 @@
 import { Router, type Request } from "express";
 import * as JWT from "jsonwebtoken";
-import { env as serviceEnv } from "@repo/services/env";
+import { env as serviceEnv } from "@repo/services";
 import { sseHub } from "../sse/hub";
 
 export const eventsRouter = Router();

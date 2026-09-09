@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { agentProcedure, authenticatedProcedure, router } from "../../trpc";
 import { chatService, ragService } from "../../services";
 import { zodUndefinedModel } from "../../schema";
-import { chatThreadModel, chatMessageModel } from "@repo/services/chat/model";
+import { chatThreadModel, chatMessageModel } from "@repo/services/model";
 import { streamAgentResponseForRagResult } from "./run-agent-stream";
 
 function assertNotAborted(signal: AbortSignal) {

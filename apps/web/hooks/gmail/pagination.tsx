@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { GmailMessageSummaryType } from "@repo/services/gmail/model";
+import type { GmailMessageSummaryType } from "@repo/services/model";
 import { trpc } from "~/trpc/client";
 
 export type GmailFolder = "inbox" | "sent" | "draft" | "trash";

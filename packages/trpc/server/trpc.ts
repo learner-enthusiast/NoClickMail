@@ -7,8 +7,8 @@ import {
   getAuthenticationCookie,
   getCsrfCookie,
 } from "./cookie";
-import { GenerateUSerTokenPayload } from "@repo/services/user/model";
-import { env } from "@repo/services/env";
+import type { GenerateUSerTokenPayload } from "@repo/services/model";
+import { env } from "@repo/services";
 import { toTRPCError } from "./map-error";
 import { checkRateLimit, type RateLimitOptions } from "./rate-limit";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import type { GmailMessageSummaryType } from "@repo/services/gmail/model";
+import type { GmailMessageSummaryType } from "@repo/services/model";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 

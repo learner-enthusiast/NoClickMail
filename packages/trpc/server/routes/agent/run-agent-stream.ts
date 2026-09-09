@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { corsairApprovalService, ragService, CorsairAgent } from "../../services";
-import { formatApprovalCreatedMessage } from "@repo/services/corsair-approvals";
-import type { RagRunResultModelType } from "@repo/services/rag/pipeline.model";
+import { formatApprovalCreatedMessage } from "@repo/services";
+import type { RagRunResultModelType } from "@repo/services/model";
 
 type RunAgentStreamDelta = { type: "delta"; text: string };
 type RunAgentStreamApproval = { type: "approval_created"; approvalId: string };

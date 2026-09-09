@@ -3,8 +3,7 @@ import { logger } from "@repo/logger";
 import { env as apiEnv } from "../env";
 import db, { eq } from "@repo/database";
 import { calendarWatchChannels, usersTable } from "@repo/database/schema";
-import { verifyPubSubPush } from "@repo/services/webhooks/verify-pubsub";
-import { verifyCalendarChannelToken } from "@repo/services/webhooks/calendar-channeel";
+import { verifyPubSubPush, verifyCalendarChannelToken } from "@repo/services";
 import { sseHub } from "../sse/hub";
 
 export const webhookRouter = Router();

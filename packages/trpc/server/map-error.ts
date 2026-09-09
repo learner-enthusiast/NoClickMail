@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { AppError, googleAccessDeniedMessage } from "@repo/services/error";
+import { AppError, googleAccessDeniedMessage } from "@repo/services";
 
 type ApiErrorLike = {
   code?: number | string;
