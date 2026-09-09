@@ -12,7 +12,10 @@ import type { RequestDeterminationModelType } from "@repo/rag-models/determiner.
 import { generateAssistantReply } from "./direct-response";
 import { generateEmailDraft } from "./email-writer";
 import type { ThreadContextMessageModelType } from "@repo/rag-models/context.model";
-import type { LongTermMemoryModelType, PersistMem0TurnInputModelType } from "@repo/rag-models/mem0.model";
+import type {
+  LongTermMemoryModelType,
+  PersistMem0TurnInputModelType,
+} from "@repo/rag-models/mem0.model";
 import type {
   RagRunInputModelType,
   RagRunMetaModelType,
@@ -25,6 +28,7 @@ import {
   type RetrievedChunkModelType,
 } from "@repo/rag-models/retrieve.model";
 import type { UpsertVectorInputModelType } from "@repo/rag-models/vector-store.model";
+import { resolvePgVectorWhenUnsure } from "./document-retrieval-policy";
 
 /** Inputs shared by the full agent-route pipeline (retrieve → enhance → execute). */
 type AgentRouteContext = {
@@ -54,7 +58,6 @@ type AgentContextFetch = {
  *   2. determiner     — classify request (Corsair / email writer / Mem0 / enhance / clarify / direct)
  *   3. conditional    — retrieve + enhance only when determiner flags require it
  *   4. saveTurnToLongTermMemoryIfEnabled — Mem0 write after assistant reply (called from runAgent)
- *   5. indexCompletedTurnForRetrieval — pgvector write after assistant reply (called from runAgent)
  */
 class RagService {
   private readonly embeddings = new EmbeddingService();
@@ -125,71 +128,76 @@ class RagService {
   }
 
   /**
+   * pgvector WRITE — chunk, embed, and upsert extracted document text (e.g. uploaded file).
+   */
+  async indexTextForRetrieval(input: {
+    userId: string;
+    threadId: string;
+    messageId: string;
+    role: "user" | "assistant" | "system";
+    text: string;
+  }): Promise<{ chunkCount: number; embeddedCount: number }> {
+    return this.indexMessagesForRetrieval({
+      userId: input.userId,
+      threadId: input.threadId,
+      messages: [{ messageId: input.messageId, role: input.role, content: input.text }],
+    });
+  }
+
+  /**
    * pgvector WRITE — chunk, embed, and upsert a completed turn for later retrieval.
    *
    * Indexes both the user prompt and assistant reply. Failures are logged, not thrown.
    */
-  async indexCompletedTurnForRetrieval(input: {
+
+  private async indexMessagesForRetrieval(input: {
     userId: string;
     threadId: string;
-    userMessageId: string;
-    assistantMessageId: string;
-    userContent: string;
-    assistantContent: string;
-  }): Promise<void> {
-    try {
-      const chunkOpts = { maxChars: env.RAG_CHUNK_SIZE, overlap: env.RAG_CHUNK_OVERLAP };
-      const createdAt = new Date().toISOString();
-      const messages = [
-        { messageId: input.userMessageId, role: "user" as const, content: input.userContent },
-        {
-          messageId: input.assistantMessageId,
-          role: "assistant" as const,
-          content: input.assistantContent,
-        },
-      ];
+    messages: {
+      messageId: string;
+      role: "user" | "assistant" | "system";
+      content: string;
+    }[];
+  }): Promise<{ chunkCount: number; embeddedCount: number }> {
+    const chunkOpts = { maxChars: env.RAG_CHUNK_SIZE, overlap: env.RAG_CHUNK_OVERLAP };
+    const createdAt = new Date().toISOString();
 
-      const records: UpsertVectorInputModelType[] = [];
-      const textsToEmbed: string[] = [];
+    const records: UpsertVectorInputModelType[] = [];
+    const textsToEmbed: string[] = [];
 
-      for (const message of messages) {
-        const chunks = chunkText(message.content, chunkOpts);
-        chunks.forEach((text, chunkIndex) => {
-          textsToEmbed.push(text);
-          records.push({
-            id: `${message.messageId}:${chunkIndex}`,
-            values: [],
-            metadata: {
-              userId: input.userId,
-              threadId: input.threadId,
-              messageId: message.messageId,
-              role: message.role,
-              chunkIndex,
-              text,
-              createdAt,
-            },
-          });
+    for (const message of input.messages) {
+      const chunks = chunkText(message.content, chunkOpts);
+      chunks.forEach((text, chunkIndex) => {
+        textsToEmbed.push(text);
+        records.push({
+          id: `${message.messageId}:${chunkIndex}`,
+          values: [],
+          metadata: {
+            userId: input.userId,
+            threadId: input.threadId,
+            messageId: message.messageId,
+            role: message.role,
+            chunkIndex,
+            text,
+            createdAt,
+          },
         });
-      }
-
-      if (textsToEmbed.length === 0) return;
-
-      const vectors = await this.embeddings.embed(textsToEmbed);
-      records.forEach((record, index) => {
-        record.values = vectors[index] ?? [];
-      });
-
-      const validRecords = records.filter((record) => record.values.length > 0);
-      await this.vectors.upsertMany(input.userId, validRecords);
-    } catch (error) {
-      logger.error("Failed to index chat turn for pgvector retrieval", {
-        error,
-        userId: input.userId,
-        threadId: input.threadId,
-        userMessageId: input.userMessageId,
-        assistantMessageId: input.assistantMessageId,
       });
     }
+
+    if (textsToEmbed.length === 0) {
+      return { chunkCount: 0, embeddedCount: 0 };
+    }
+
+    const vectors = await this.embeddings.embed(textsToEmbed);
+    records.forEach((record, index) => {
+      record.values = vectors[index] ?? [];
+    });
+
+    const validRecords = records.filter((record) => record.values.length > 0);
+    await this.vectors.upsertMany(input.userId, validRecords);
+
+    return { chunkCount: textsToEmbed.length, embeddedCount: validRecords.length };
   }
 
   /** Generate polished email copy when the determiner routes to the email writer agent. */
@@ -265,12 +273,15 @@ class RagService {
     retrieved: RetrievedChunkModelType[];
     longTermMemories: LongTermMemoryModelType[];
   }> {
-    if (!determination.requiresExternalEnhancement && !determination.requiresLongTermMemory) {
+    if (
+      !determination.requiresPgVectorRetrieval &&
+      !determination.requiresLongTermMemory
+    ) {
       return { retrieved: [], longTermMemories: [] };
     }
 
     const [retrieved, longTermMemories] = await Promise.all([
-      determination.requiresExternalEnhancement
+      determination.requiresPgVectorRetrieval
         ? this.retrieve({
             userId: input.userId,
             query: input.prompt,
@@ -298,7 +309,7 @@ class RagService {
       runEmailWriterAgent,
       determination,
       retrieve:
-        determination.requiresExternalEnhancement && this.isPgVectorEnabled()
+        determination.requiresPgVectorRetrieval && this.isPgVectorEnabled()
           ? {
               topK: RAG_TOP_K,
               matchCount: retrieved.length,
@@ -353,8 +364,10 @@ class RagService {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
     const shouldEnhance =
-      determination.requiresExternalEnhancement &&
-      (retrieved.length > 0 || longTermMemories.length > 0);
+      (determination.requiresPgVectorRetrieval && retrieved.length > 0) ||
+      (determination.requiresLongTermMemory && longTermMemories.length > 0) ||
+      (determination.requiresExternalEnhancement &&
+        (retrieved.length > 0 || longTermMemories.length > 0));
 
     const enhancedPrompt = shouldEnhance
       ? await enhanceUserPrompt(input.prompt, retrieved, longTermMemories, signal)
@@ -412,11 +425,13 @@ class RagService {
 
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-    const determination = await determineRequest({
+    let determination = await determineRequest({
       history,
       prompt: input.prompt,
       signal,
     });
+
+    determination = resolvePgVectorWhenUnsure(input.prompt, history, determination);
 
     const route = resolveRoute(determination);
     const runCorsairAgent = determination.requiresCorsairMcpTool;

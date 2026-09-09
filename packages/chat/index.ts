@@ -50,6 +50,7 @@ class ChatService {
     role: "user" | "assistant" | "system";
     content: string;
     approvalId?: string;
+    imageUrl?: string;
   }) {
     await this.getThreadForUser(input.userId, input.threadId);
     const content = input.content.slice(0, MAX_MESSAGE_CHARS);
@@ -61,6 +62,7 @@ class ChatService {
         role: input.role,
         content,
         approvalId: input.approvalId ?? null,
+        imageUrl: input.imageUrl ?? null,
         tokenEstimate: estimateTokens(content),
       })
       .returning();
@@ -71,6 +73,33 @@ class ChatService {
       .where(and(eq(chatThreads.id, input.threadId), eq(chatThreads.userId, input.userId)));
 
     return msg!;
+  }
+
+  async getMessageForUser(userId: string, messageId: string) {
+    const [msg] = await db
+      .select()
+      .from(chatMessages)
+      .where(and(eq(chatMessages.id, messageId), eq(chatMessages.userId, userId)))
+      .limit(1);
+    if (!msg) throw notFound("Message not found");
+    return msg;
+  }
+
+  async updateMessageImageUrl(input: {
+    userId: string;
+    messageId: string;
+    imageUrl: string;
+  }) {
+    const [msg] = await db
+      .update(chatMessages)
+      .set({ imageUrl: input.imageUrl })
+      .where(
+        and(eq(chatMessages.id, input.messageId), eq(chatMessages.userId, input.userId)),
+      )
+      .returning();
+
+    if (!msg) throw notFound("Message not found");
+    return msg;
   }
 }
 

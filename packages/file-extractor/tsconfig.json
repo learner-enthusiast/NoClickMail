@@ -3,9 +3,7 @@
   "compilerOptions": {
     "module": "Preserve",
     "moduleResolution": "Bundler",
-    "types": ["node"],
-    "declaration": false,
-    "declarationMap": false
+    "types": ["node"]
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules"]

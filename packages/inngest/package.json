@@ -9,6 +9,13 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@repo/env": "workspace:*", "inngest": "^4.13.0"
+    "@repo/chat": "workspace:*",
+    "@repo/env": "workspace:*",
+    "@repo/filesavemodule": "workspace:*",
+    "@repo/file-extractor": "workspace:*",
+    "@repo/logger": "workspace:*",
+    "@repo/rag": "workspace:*",
+    "inngest": "^4.13.0",
+    "zod": "^4.3.5"
   }
 }

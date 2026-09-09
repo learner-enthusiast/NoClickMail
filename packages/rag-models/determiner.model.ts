@@ -7,12 +7,15 @@ export const requestDeterminationModel = z.object({
     .describe("True when Gmail or Google Calendar actions via Corsair MCP are required."),
   requiresLongTermMemory: z
     .boolean()
-    .describe("True when distilled user facts from Mem0 would help answer the request."),
-  requiresExternalEnhancement: z
+    .describe("True when past preferences or standing instructions outside this thread would help."),
+  requiresPgVectorRetrieval: z
     .boolean()
     .describe(
-      "True when the prompt should be enhanced using retrieved pgvector excerpts and/or Mem0 memories.",
+      "True when the answer may come from uploaded files/documents or earlier parts of this conversation not fully visible in the last 10 messages.",
     ),
+  requiresExternalEnhancement: z
+    .boolean()
+    .describe("True when retrieved document excerpts or past context should reshape the prompt."),
   requiresEmailWriterAgent: z
     .boolean()
     .describe(
@@ -43,6 +46,7 @@ export function resolveRoute(d: RequestDeterminationModelType): RagRoute {
   if (
     !d.requiresCorsairMcpTool &&
     !d.requiresLongTermMemory &&
+    !d.requiresPgVectorRetrieval &&
     !d.requiresExternalEnhancement &&
     !d.requiresEmailWriterAgent
   ) {

@@ -34,6 +34,19 @@ export { default as CorsairApprovalService } from "@repo/corsair-approvals";
 export { default as CorsairAgent } from "@repo/corsair-agent";
 export { default as RunCorsairAgent } from "@repo/corsair-agent";
 export { default as FileSaveService } from "@repo/filesavemodule";
+export { default as FileExtractorService } from "@repo/file-extractor";
+export {
+  fileExtractInputModel,
+  fileExtractResultModel,
+  supportedFileFormatModel,
+  extractionMethodModel,
+} from "@repo/file-extractor";
+export type {
+  FileExtractInputModelType,
+  FileExtractResultModelType,
+  SupportedFileFormatModelType,
+  ExtractionMethodModelType,
+} from "@repo/file-extractor";
 
 export {
   completeChat,
@@ -61,3 +74,17 @@ export {
 } from "@repo/webhooks/calendar-channeel";
 
 export { inngest, isInngestEnabled } from "@repo/inngest";
+export {
+  CHUNK_TEXT_AND_UPLOAD_EVENT,
+  UPLOAD_IMAGE_AND_SAVE_EVENT,
+  chunkTextAndUploadInputModel,
+  chunkTextAndUploadOutputModel,
+  uploadImageAndSaveInputModel,
+  uploadImageAndSaveOutputModel,
+} from "@repo/inngest";
+export type {
+  ChunkTextAndUploadInputModelType,
+  ChunkTextAndUploadOutputModelType,
+  UploadImageAndSaveInputModelType,
+  UploadImageAndSaveOutputModelType,
+} from "@repo/inngest";

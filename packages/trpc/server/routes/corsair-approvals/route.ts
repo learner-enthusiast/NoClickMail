@@ -28,7 +28,7 @@ async function appendApprovalResultAndUpdateMem0(
   const params = approval.parameters as { prompt?: string; messageId?: string };
   const userContent = typeof params.prompt === "string" ? params.prompt : approval.title;
 
-  const assistantMessage = await chatService.appendMessage({
+  await chatService.appendMessage({
     userId,
     threadId,
     role: "assistant",
@@ -44,14 +44,14 @@ async function appendApprovalResultAndUpdateMem0(
       assistantContent: output,
     });
 
-    await ragService.indexCompletedTurnForRetrieval({
-      userId,
-      threadId,
-      userMessageId: params.messageId,
-      assistantMessageId: assistantMessage.id,
-      userContent,
-      assistantContent: output,
-    });
+    // await ragService.indexCompletedTurnForRetrieval({
+    //   userId,
+    //   threadId,
+    //   userMessageId: params.messageId,
+    //   assistantMessageId: assistantMessage.id,
+    //   userContent,
+    //   assistantContent: output,
+    // });
   }
 }
 
@@ -60,7 +60,19 @@ export const corsairApprovalsRouter = router({
     .input(
       z
         .object({
-          statuses: z.array(z.enum(["pending", "failed", "executing", "completed", "rejected", "expired", "approved"])).optional(),
+          statuses: z
+            .array(
+              z.enum([
+                "pending",
+                "failed",
+                "executing",
+                "completed",
+                "rejected",
+                "expired",
+                "approved",
+              ]),
+            )
+            .optional(),
         })
         .optional(),
     )
@@ -111,67 +123,79 @@ export const corsairApprovalsRouter = router({
       return corsairApprovalService.serialize(row);
     }),
 
-  approve: agentProcedure
-    .input(z.object({ approvalId: z.uuid() }))
-    .mutation(async function* ({ ctx, input }) {
-      try {
-        assertNotAborted(ctx.signal);
+  approve: agentProcedure.input(z.object({ approvalId: z.uuid() })).mutation(async function* ({
+    ctx,
+    input,
+  }) {
+    try {
+      assertNotAborted(ctx.signal);
 
-        for await (const event of corsairApprovalService.executeStream(
-          ctx.user,
-          input.approvalId,
-          ctx.signal,
-        )) {
-          if (event.type === "delta") {
-            yield { type: "delta" as const, text: event.text };
-          } else {
-            await appendApprovalResultAndUpdateMem0(ctx.user, input.approvalId, event.threadId, event.output);
-            yield {
-              type: "done" as const,
-              approvalId: input.approvalId,
-              threadId: event.threadId,
-              output: event.output,
-            };
-          }
+      for await (const event of corsairApprovalService.executeStream(
+        ctx.user,
+        input.approvalId,
+        ctx.signal,
+      )) {
+        if (event.type === "delta") {
+          yield { type: "delta" as const, text: event.text };
+        } else {
+          await appendApprovalResultAndUpdateMem0(
+            ctx.user,
+            input.approvalId,
+            event.threadId,
+            event.output,
+          );
+          yield {
+            type: "done" as const,
+            approvalId: input.approvalId,
+            threadId: event.threadId,
+            output: event.output,
+          };
         }
-      } catch (err) {
-        throw toTRPCError(err);
       }
-    }),
+    } catch (err) {
+      throw toTRPCError(err);
+    }
+  }),
 
-  retry: agentProcedure
-    .input(z.object({ approvalId: z.uuid() }))
-    .mutation(async function* ({ ctx, input }) {
-      try {
-        assertNotAborted(ctx.signal);
+  retry: agentProcedure.input(z.object({ approvalId: z.uuid() })).mutation(async function* ({
+    ctx,
+    input,
+  }) {
+    try {
+      assertNotAborted(ctx.signal);
 
-        const approval = await corsairApprovalService.getForUser(ctx.user, input.approvalId);
-        if (approval.status !== "failed" && approval.status !== "executing") {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `Only failed or stuck approvals can be retried (current: ${approval.status})`,
-          });
-        }
-
-        for await (const event of corsairApprovalService.executeStream(
-          ctx.user,
-          input.approvalId,
-          ctx.signal,
-        )) {
-          if (event.type === "delta") {
-            yield { type: "delta" as const, text: event.text };
-          } else {
-            await appendApprovalResultAndUpdateMem0(ctx.user, input.approvalId, event.threadId, event.output);
-            yield {
-              type: "done" as const,
-              approvalId: input.approvalId,
-              threadId: event.threadId,
-              output: event.output,
-            };
-          }
-        }
-      } catch (err) {
-        throw toTRPCError(err);
+      const approval = await corsairApprovalService.getForUser(ctx.user, input.approvalId);
+      if (approval.status !== "failed" && approval.status !== "executing") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Only failed or stuck approvals can be retried (current: ${approval.status})`,
+        });
       }
-    }),
+
+      for await (const event of corsairApprovalService.executeStream(
+        ctx.user,
+        input.approvalId,
+        ctx.signal,
+      )) {
+        if (event.type === "delta") {
+          yield { type: "delta" as const, text: event.text };
+        } else {
+          await appendApprovalResultAndUpdateMem0(
+            ctx.user,
+            input.approvalId,
+            event.threadId,
+            event.output,
+          );
+          yield {
+            type: "done" as const,
+            approvalId: input.approvalId,
+            threadId: event.threadId,
+            output: event.output,
+          };
+        }
+      }
+    } catch (err) {
+      throw toTRPCError(err);
+    }
+  }),
 });

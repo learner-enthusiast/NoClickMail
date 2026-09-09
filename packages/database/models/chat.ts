@@ -32,6 +32,7 @@ export const chatMessages = pgTable(
     }),
     // rough token estimate, stored so we can budget context without re-counting
     tokenEstimate: integer("token_estimate").notNull().default(0),
+    imageUrl: text("image_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

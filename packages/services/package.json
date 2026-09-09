@@ -20,6 +20,7 @@
     "@repo/env": "workspace:*",
     "@repo/error": "workspace:*",
     "@repo/filesavemodule": "workspace:*",
+    "@repo/file-extractor": "workspace:*",
     "@repo/gmail": "workspace:*",
     "@repo/inngest": "workspace:*",
     "@repo/openai-client": "workspace:*",

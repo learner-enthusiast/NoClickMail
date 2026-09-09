@@ -3,6 +3,7 @@ import {
   ChatService,
   CorsairAgent,
   CorsairApprovalService,
+  FileExtractorService,
   GmailService,
   RagService,
   UserService,
@@ -15,3 +16,4 @@ export { CorsairAgent };
 export const chatService = new ChatService();
 export const ragService = new RagService();
 export const corsairApprovalService = new CorsairApprovalService();
+export const fileExtractorService = new FileExtractorService();
