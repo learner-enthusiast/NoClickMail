@@ -2,7 +2,7 @@ const DEFAULT_MAX_CHARS = 600;
 const DEFAULT_OVERLAP = 80;
 
 /**
- * Split text into overlapping chunks for embedding / Pinecone indexing.
+ * Split text into overlapping chunks for embedding / pgvector indexing.
  *
  * Strategy:
  *   1. Split on double newlines (paragraph boundaries) when possible

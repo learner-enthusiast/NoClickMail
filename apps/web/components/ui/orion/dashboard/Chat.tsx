@@ -126,6 +126,7 @@ function showRagToast(rag: RagRunMetaModelType) {
   const parts = [
     `route ${rag.route}`,
     rag.runCorsairAgent ? "corsair" : null,
+    rag.runEmailWriterAgent ? "email-writer" : null,
     rag.enhance ? "prompt enhanced" : null,
     `retrieved ${retrieveMatches}`,
     `memories ${memoryMatches}`,

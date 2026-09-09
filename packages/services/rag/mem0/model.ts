@@ -9,7 +9,8 @@ export const longTermMemoryModel = z.object({
 
 export type LongTermMemoryModelType = z.infer<typeof longTermMemoryModel>;
 
-export const storeChatTurnInputModel = z.object({
+/** Payload for persisting a completed user+assistant turn to Mem0. */
+export const persistMem0TurnInputModel = z.object({
   userId: z.uuid(),
   threadId: z.uuid(),
   messageId: z.uuid(),
@@ -17,15 +18,16 @@ export const storeChatTurnInputModel = z.object({
   assistantContent: z.string().min(1),
 });
 
-export type StoreChatTurnInputModelType = z.infer<typeof storeChatTurnInputModel>;
+export type PersistMem0TurnInputModelType = z.infer<typeof persistMem0TurnInputModel>;
 
-export const searchLongTermMemoryInputModel = z.object({
+/** Payload for searching a user's distilled Mem0 memories. */
+export const searchMem0MemoriesInputModel = z.object({
   userId: z.uuid(),
   query: z.string().min(1),
   topK: z.number().int().positive().default(5),
 });
 
-export type SearchLongTermMemoryInputModelType = z.infer<typeof searchLongTermMemoryInputModel>;
+export type SearchMem0MemoriesInputModelType = z.infer<typeof searchMem0MemoriesInputModel>;
 
 export const mem0AddResultModel = z.object({
   queued: z.boolean().default(true),

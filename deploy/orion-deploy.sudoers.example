@@ -1,10 +1,11 @@
 # Passwordless systemctl for GitHub Actions home-server deploy.
 # Install once on the server:
 #
-#   sudo cp deploy/orion-deploy.sudoers.example /etc/sudoers.d/orion-deploy
-#   sudo chmod 440 /etc/sudoers.d/orion-deploy
+#   sudo visudo -f /etc/sudoers.d/orion-deploy
+#   # paste the line below (replace YOUR_DEPLOY_USER)
 #   sudo visudo -c
 #
-# Replace YOUR_DEPLOY_USER with the value of the GitHub SSH_USER secret.
+# YOUR_DEPLOY_USER must match the GitHub secret SSH_USER exactly.
+# Include both /bin and /usr/bin paths (varies by distro).
 
-YOUR_DEPLOY_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart orion, /bin/systemctl is-active orion, /bin/systemctl status orion
+YOUR_DEPLOY_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart orion, /bin/systemctl is-active orion, /bin/systemctl status orion, /usr/bin/systemctl restart orion, /usr/bin/systemctl is-active orion, /usr/bin/systemctl status orion

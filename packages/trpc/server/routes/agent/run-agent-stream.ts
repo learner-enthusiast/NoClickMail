@@ -28,6 +28,32 @@ function rethrowAbortError(e: unknown): never {
   throw e;
 }
 
+/** Inject email writer draft into the enhanced prompt for Corsair planning/execution. */
+function withEmailDraft(enhancedPrompt: string, emailDraft: string): string {
+  return [
+    enhancedPrompt,
+    "",
+    "---",
+    "Email draft from Orion writer (use for send/reply unless the user overrides):",
+    emailDraft,
+    "---",
+  ].join("\n");
+}
+
+async function createEmailDraft(rag: RagRunResultModelType, prompt: string, signal: AbortSignal) {
+  return ragService.generateEmailDraft(
+    {
+      prompt,
+      enhancedPrompt: rag.enhancedPrompt,
+      history: rag.history,
+      retrieved: rag.retrieved,
+      longTermMemories: rag.longTermMemories,
+    },
+    signal,
+  );
+}
+
+/** Stream pre-built clarify/direct replies from the determiner. */
 async function* runDirectOrClarifyRoute(
   rag: RagRunResultModelType,
 ): AsyncGenerator<RunAgentStreamDelta, RunAgentExecution> {
@@ -36,6 +62,7 @@ async function* runDirectOrClarifyRoute(
   return { output };
 }
 
+/** Stream a general assistant reply (no Corsair, no email writer). */
 async function* runAssistantReplyRoute(
   rag: RagRunResultModelType,
   signal: AbortSignal,
@@ -52,12 +79,33 @@ async function* runAssistantReplyRoute(
   return { output };
 }
 
+/** Stream polished email copy only (no Gmail/Calendar actions). */
+async function* runEmailWriterRoute(
+  input: RunRagPipelineInput,
+): AsyncGenerator<RunAgentStreamDelta, RunAgentExecution> {
+  const output = await createEmailDraft(input.rag, input.prompt, input.signal);
+  if (output) yield { type: "delta", text: output };
+  return { output };
+}
+
+/** Stream Corsair Gmail/Calendar actions; optionally prepends email writer draft. */
 async function* runCorsairRoute(
   input: RunRagPipelineInput,
 ): AsyncGenerator<RunAgentStreamEvent, RunAgentExecution> {
+  let ragForExecution = input.rag;
+  let emailDraft: string | undefined;
+
+  if (input.rag.runEmailWriterAgent) {
+    emailDraft = await createEmailDraft(input.rag, input.prompt, input.signal);
+    ragForExecution = {
+      ...input.rag,
+      enhancedPrompt: withEmailDraft(input.rag.enhancedPrompt, emailDraft),
+    };
+  }
+
   const { planned, requiresApproval } = await corsairApprovalService.planFromRag({
     prompt: input.prompt,
-    rag: input.rag,
+    rag: ragForExecution,
     signal: input.signal,
   });
 
@@ -69,12 +117,13 @@ async function* runCorsairRoute(
         prompt: input.prompt,
         threadId: input.threadId,
         messageId: input.messageId,
-        rag: input.rag,
+        rag: ragForExecution,
         planned,
       }),
     });
 
-    const output = formatApprovalCreatedMessage(approval.id);
+    const approvalMessage = formatApprovalCreatedMessage(approval.id);
+    const output = emailDraft ? `${emailDraft}\n\n---\n\n${approvalMessage}` : approvalMessage;
     yield { type: "approval_created", approvalId: approval.id };
     yield { type: "delta", text: output };
     return { output, approvalId: approval.id };
@@ -82,18 +131,31 @@ async function* runCorsairRoute(
 
   const agent = new CorsairAgent(input.userId);
   let output = "";
+
+  if (emailDraft) {
+    const draftBlock = `${emailDraft}\n\n---\n\n`;
+    output += draftBlock;
+    yield { type: "delta", text: draftBlock };
+  }
+
   for await (const delta of agent.executePromptStream(
     input.prompt,
     input.rag.history,
     input.signal,
-    { enhancedPrompt: input.rag.enhancedPrompt, retrieved: input.rag.retrieved },
+    { enhancedPrompt: ragForExecution.enhancedPrompt, retrieved: input.rag.retrieved },
   )) {
     output += delta;
     yield { type: "delta", text: delta };
   }
+
   return { output };
 }
 
+/**
+ * Pick execution strategy from RAG flags and stream the assistant response.
+ *
+ * Order: clarify/direct → Corsair → email writer → general assistant.
+ */
 export async function* runRagPipeline(
   input: RunRagPipelineInput,
 ): AsyncGenerator<RunAgentStreamEvent, RunAgentExecution> {
@@ -107,10 +169,15 @@ export async function* runRagPipeline(
     return yield* runCorsairRoute(input);
   }
 
+  if (rag.runEmailWriterAgent) {
+    return yield* runEmailWriterRoute(input);
+  }
+
   return yield* runAssistantReplyRoute(rag, input.signal);
 }
 
-export async function* executeAgentTurn(
+/** Entry point from agentsRouter — streams deltas then returns final output. */
+export async function* streamAgentResponseForRagResult(
   input: RunRagPipelineInput,
 ): AsyncGenerator<RunAgentStreamEvent, RunAgentExecution> {
   try {

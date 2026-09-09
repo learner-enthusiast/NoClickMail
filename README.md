@@ -10,7 +10,7 @@ Orion connects to your Google accounts, syncs mail and events in real time, and 
 
 ## Tech stack
 
-Next.js 16, React 19, TypeScript, Tailwind CSS v4, tRPC v11, TanStack React Query, Express 5, PostgreSQL, Drizzle ORM, Corsair (Gmail + Calendar), OpenAI, Pinecone (RAG), Inngest (background jobs), Google OAuth, SSE, Docker, pnpm, Turborepo.
+Next.js 16, React 19, TypeScript, Tailwind CSS v4, tRPC v11, TanStack React Query, Express 5, PostgreSQL, Drizzle ORM, pgvector (RAG), Corsair (Gmail + Calendar), OpenAI, Mem0, Inngest (background jobs), Google OAuth, SSE, Docker, pnpm, Turborepo.
 
 ## Monorepo structure
 
@@ -48,8 +48,7 @@ flowchart TB
   end
 
   subgraph data [Data & AI]
-    PG[(PostgreSQL)]
-    Pinecone[(Pinecone RAG)]
+    PG[(PostgreSQL + pgvector)]
     OpenAI[OpenAI API]
   end
 
@@ -64,9 +63,7 @@ flowchart TB
   Connect --> Google
   WH --> Google
   TRPC --> OpenAI
-  TRPC --> Pinecone
   Inngest --> InngestCloud
-  Inngest --> Pinecone
 ```
 
 | Layer | Responsibility |
@@ -81,7 +78,7 @@ flowchart TB
 
 1. Browser calls `NEXT_PUBLIC_API_URL` with `credentials: include` and CSRF header.
 2. API validates JWT from httpOnly cookie → builds tRPC context.
-3. Procedures read/write Postgres; agent path may trigger Inngest → Pinecone RAG ingest.
+3. Procedures read/write Postgres; agent path chunks, embeds, and stores RAG vectors in pgvector.
 4. Gmail/Calendar changes arrive via Pub/Sub webhook → SSE notifies connected clients.
 
 ### Deployment modes
@@ -250,17 +247,18 @@ Cookies on home-server deploy use same-origin `/trpc`; set `COOKIE_DOMAIN` if yo
 
 ---
 
-### OpenAI & RAG (Pinecone)
+### OpenAI & RAG (pgvector + Mem0)
 
 | Variable                      | Required (prod) | Description                                      |
 | ----------------------------- | --------------- | ------------------------------------------------ |
 | `OPENAI_API_KEY`              | Yes             | Orion Intelligence + embedding generation        |
-| `PINECONE_API_KEY`            | Yes             | Vector store for RAG                             |
-| `PINECONE_INDEX`              | Yes             | Pinecone index name                              |
 | `OPENAI_EMBEDDING_MODEL`      | No              | Default `text-embedding-3-small`                 |
-| `OPENAI_EMBEDDING_DIMENSIONS` | Yes             | Must match Pinecone index dimension (1024/1536)  |
+| `OPENAI_EMBEDDING_DIMENSIONS` | Yes             | Must match `rag_embedding_chunks.embedding` (1536) |
 | `RAG_CHUNK_SIZE`              | No              | Default `600`                                    |
 | `RAG_CHUNK_OVERLAP`           | No              | Default `80`                                     |
+| `MEM0_API_KEY`                | No              | Optional long-term memory via Mem0 Platform      |
+
+Postgres must run with the **pgvector** extension (`pgvector/pgvector:pg15` Docker image).
 
 ---
 
@@ -474,7 +472,6 @@ flowchart TB
 
   subgraph remote [Remote cloud]
     Neon[(Neon Postgres backup)]
-    Pinecone[(Pinecone)]
     Inngest[Inngest Cloud]
     Google[Google APIs]
   end
@@ -486,7 +483,6 @@ flowchart TB
   Proxy -->|"/trpc /auth /connect /webhooks"| API
   Web -->|API_INTERNAL_URL| API
   API --> PG
-  API --> Pinecone
   API --> Inngest
   API --> Google
   Sync -->|pg_dump daily| Neon
@@ -536,7 +532,7 @@ Secrets live in **GitHub repository secrets**. The workflow generates `.env` on 
 | `CLIENT_URL` | Public URL (e.g. `https://orion.example.com`) — also `BASE_URL` |
 | `DATABASE_URL` | Remote Neon URL for daily sync |
 | `POSTGRES_PASSWORD` | Local Postgres password (keep stable) |
-| `PINECONE_*`, `INNGEST_*`, `OPENAI_*` | RAG pipeline |
+| `MEM0_*`, `INNGEST_*`, `OPENAI_*` | RAG pipeline |
 | `CORSAIR_*`, `GMAIL_PUBSUB_TOPIC_ID` | Gmail/Calendar |
 | `EXTERNAL_PORT` | Host port Docker binds (e.g. `8080`) — tunnel targets `http://127.0.0.1:EXTERNAL_PORT` |
 
@@ -630,7 +626,7 @@ docker compose -f docker-compose.deploy.yml --env-file .env up -d
 
 - **Auth:** JWT in httpOnly cookies; CSRF token for tRPC mutations. Home-server: same-origin `/trpc` via nginx.
 - **Realtime:** SSE at `/events/stream` — webhooks notify connected clients.
-- **AI / RAG:** Agent messages → Inngest → chunk + embed → Pinecone upsert.
+- **AI / RAG:** Agent messages → chunk + embed → pgvector upsert in Postgres; optional Mem0 long-term memory.
 - **Rate limiting:** Express limiters on `/auth`, `/connect`, `/trpc`.
 
 ---
@@ -645,7 +641,7 @@ docker compose -f docker-compose.deploy.yml --env-file .env up -d
 | SSL DB errors (Neon)             | Use `sslmode=require` in connection string                                                                                                   |
 | `NEXT_PUBLIC_*` not updating     | Rebuild web image / `pnpm build` after env change                                                                                            |
 | Home-server db-sync fails        | Use Neon **direct** URL in `DATABASE_URL_DIRECT`; pooler URLs fail `pg_restore`                                                            |
-| RAG not ingesting                | Verify `PINECONE_*`, `INNGEST_*`, `OPENAI_EMBEDDING_DIMENSIONS` match index; check `docker compose logs api`                                 |
+| RAG not ingesting                | Verify Postgres has pgvector extension; run `pnpm db:migrate`; check `OPENAI_EMBEDDING_DIMENSIONS` matches migration |
 
 ---
 

@@ -3,8 +3,8 @@ import { env } from "../../env";
 import type {
   LongTermMemoryModelType,
   Mem0AddResultModelType,
-  SearchLongTermMemoryInputModelType,
-  StoreChatTurnInputModelType,
+  PersistMem0TurnInputModelType,
+  SearchMem0MemoriesInputModelType,
 } from "./model";
 
 const MEM0_API_BASE = "https://api.mem0.ai/v3";
@@ -27,17 +27,19 @@ type Mem0AddResponse = {
  * Mem0 Platform client — per-user long-term memory.
  *
  * Mem0 extracts durable facts from chat turns (preferences, names, tasks)
- * and stores them scoped by `user_id`. Unlike Pinecone chunk retrieval
+ * and stores them scoped by `user_id`. Unlike pgvector chunk retrieval
  * (raw message text), Mem0 returns distilled memory statements.
  *
  * Requires MEM0_API_KEY from https://app.mem0.ai
  */
 class Mem0LongTermMemory {
+  /** True when MEM0_API_KEY is present in environment. */
   isConfigured(): boolean {
     return Boolean(env.MEM0_API_KEY);
   }
 
-  private async request<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  /** POST helper for Mem0 REST endpoints. */
+  private async postToMem0Api<T>(path: string, body: Record<string, unknown>): Promise<T> {
     if (!env.MEM0_API_KEY) {
       throw new Error("Mem0 is not configured (MEM0_API_KEY missing)");
     }
@@ -60,16 +62,20 @@ class Mem0LongTermMemory {
   }
 
   /**
-   * Store a completed chat turn. Mem0 LLM-extracts facts from the exchange
-   * and merges them into the user's long-term memory graph.
+   * WRITE path — queue a completed chat turn for Mem0 fact extraction.
    *
-   * Called after the assistant reply is persisted (see agentsRouter.runAgent).
+   * Sends the raw user+assistant exchange to Mem0. Mem0's LLM distills
+   * durable facts and merges them into the user's long-term memory graph.
+   *
+   * Called after the assistant reply is saved to Postgres (see agentsRouter.runAgent).
    */
-  async addChatTurn(input: StoreChatTurnInputModelType): Promise<Mem0AddResultModelType | null> {
+  async persistCompletedTurnToMem0(
+    input: PersistMem0TurnInputModelType,
+  ): Promise<Mem0AddResultModelType | null> {
     if (!this.isConfigured()) return null;
 
     try {
-      const json = await this.request<Mem0AddResponse>("/memories/add/", {
+      const json = await this.postToMem0Api<Mem0AddResponse>("/memories/add/", {
         messages: [
           { role: "user", content: input.userContent },
           { role: "assistant", content: input.assistantContent },
@@ -92,7 +98,7 @@ class Mem0LongTermMemory {
 
       return { queued: true, eventId };
     } catch (error) {
-      logger.error("Mem0 addChatTurn failed", {
+      logger.error("Mem0 persistCompletedTurnToMem0 failed", {
         error,
         userId: input.userId,
         threadId: input.threadId,
@@ -103,14 +109,18 @@ class Mem0LongTermMemory {
   }
 
   /**
-   * Semantic search over a user's long-term memories.
-   * Used during RAG retrieve stage before prompt enhancement.
+   * READ path — semantic search over a user's long-term Mem0 memories.
+   *
+   * Used during the RAG agent route when the determiner sets
+   * requiresLongTermMemory=true.
    */
-  async search(input: SearchLongTermMemoryInputModelType): Promise<LongTermMemoryModelType[]> {
+  async searchUserLongTermMemories(
+    input: SearchMem0MemoriesInputModelType,
+  ): Promise<LongTermMemoryModelType[]> {
     if (!this.isConfigured()) return [];
 
     try {
-      const json = await this.request<Mem0SearchResponse>("/memories/search/", {
+      const json = await this.postToMem0Api<Mem0SearchResponse>("/memories/search/", {
         query: input.query,
         filters: { user_id: input.userId },
         top_k: input.topK,
@@ -124,7 +134,7 @@ class Mem0LongTermMemory {
           score: row.score ?? 0,
         }));
     } catch (error) {
-      logger.error("Mem0 search failed", { error, userId: input.userId });
+      logger.error("Mem0 searchUserLongTermMemories failed", { error, userId: input.userId });
       return [];
     }
   }

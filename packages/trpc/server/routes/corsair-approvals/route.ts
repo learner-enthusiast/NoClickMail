@@ -15,7 +15,10 @@ function assertNotAborted(signal: AbortSignal) {
   }
 }
 
-async function finalizeApprovedTurn(
+/**
+ * After approval execution: append result to Postgres and update Mem0 long-term memory.
+ */
+async function appendApprovalResultAndUpdateMem0(
   userId: string,
   approvalId: string,
   threadId: string,
@@ -25,7 +28,7 @@ async function finalizeApprovedTurn(
   const params = approval.parameters as { prompt?: string; messageId?: string };
   const userContent = typeof params.prompt === "string" ? params.prompt : approval.title;
 
-  await chatService.appendMessage({
+  const assistantMessage = await chatService.appendMessage({
     userId,
     threadId,
     role: "assistant",
@@ -33,10 +36,19 @@ async function finalizeApprovedTurn(
   });
 
   if (params.messageId) {
-    await ragService.storeChatTurn({
+    await ragService.saveTurnToLongTermMemoryIfEnabled({
       userId,
       threadId,
       messageId: params.messageId,
+      userContent,
+      assistantContent: output,
+    });
+
+    await ragService.indexCompletedTurnForRetrieval({
+      userId,
+      threadId,
+      userMessageId: params.messageId,
+      assistantMessageId: assistantMessage.id,
       userContent,
       assistantContent: output,
     });
@@ -113,7 +125,7 @@ export const corsairApprovalsRouter = router({
           if (event.type === "delta") {
             yield { type: "delta" as const, text: event.text };
           } else {
-            await finalizeApprovedTurn(ctx.user, input.approvalId, event.threadId, event.output);
+            await appendApprovalResultAndUpdateMem0(ctx.user, input.approvalId, event.threadId, event.output);
             yield {
               type: "done" as const,
               approvalId: input.approvalId,
@@ -149,7 +161,7 @@ export const corsairApprovalsRouter = router({
           if (event.type === "delta") {
             yield { type: "delta" as const, text: event.text };
           } else {
-            await finalizeApprovedTurn(ctx.user, input.approvalId, event.threadId, event.output);
+            await appendApprovalResultAndUpdateMem0(ctx.user, input.approvalId, event.threadId, event.output);
             yield {
               type: "done" as const,
               approvalId: input.approvalId,

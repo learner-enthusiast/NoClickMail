@@ -13,7 +13,7 @@ const ENHANCER_SYSTEM_PROMPT =
 /**
  * Stage 3 — Enhance.
  *
- * Rewrites the user's prompt using Pinecone chunks and Mem0 long-term memories.
+ * Rewrites the user's prompt using pgvector chunks and Mem0 long-term memories.
  * Falls back to template assembly if the LLM call fails.
  */
 export async function enhanceUserPrompt(

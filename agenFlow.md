@@ -77,11 +77,11 @@ sequenceDiagram
 flowchart LR
     A[Receive prompt] --> B[Get or create thread]
     B --> C[appendMessage user]
-    C --> D[ragService.runForUserMessage]
+    C --> D[ragService.classifyAndPrepareAgentContext]
     D --> E[yield meta event]
-    E --> F[executeAgentTurn]
+    E --> F[streamAgentResponseForRagResult]
     F --> G[appendMessage assistant]
-    G --> H[ragService.storeChatTurn]
+    G --> H[ragService.saveTurnToLongTermMemoryIfEnabled]
     H --> I[yield done event]
 ```
 
@@ -89,11 +89,11 @@ Each turn:
 
 1. **Thread** — reuse existing or create new from prompt snippet.
 2. **Persist user message** — `chatService.appendMessage(role: "user")`.
-3. **RAG** — `ragService.runForUserMessage(...)` decides routing.
+3. **RAG** — `ragService.classifyAndPrepareAgentContext(...)` decides routing.
 4. **Stream meta** — `{ type: "meta", threadId, rag }` to client.
-5. **Execute turn** — `executeAgentTurn(...)` in `run-agent-stream.ts`.
+5. **Execute turn** — `streamAgentResponseForRagResult(...)` in `run-agent-stream.ts`.
 6. **Persist assistant message** — includes `content` and optional `approvalId`.
-7. **Store in memory** — `ragService.storeChatTurn(...)` for long-term RAG.
+7. **Store in memory** — `ragService.saveTurnToLongTermMemoryIfEnabled(...)` for long-term RAG.
 8. **Stream done** — `{ type: "done", output, approvalId, rag }`.
 
 ---
@@ -111,7 +111,7 @@ flowchart TD
     C -->|clarify| D[Return clarifying question]
     C -->|direct| E[Return direct answer]
     C -->|agent| F{Enhancement needed?}
-    F -->|Pinecone| G[Retrieve chunks]
+    F -->|pgvector| G[Retrieve chunks]
     F -->|Mem0| H[Retrieve long-term memories]
     G --> I[Enhance prompt]
     H --> I
@@ -124,7 +124,7 @@ flowchart TD
 |-------|------|----------------|
 | **`clarify`** | Missing info | Returns a clarifying question immediately (no LLM agent call) |
 | **`direct`** | Simple reply, no tools | Returns a canned/direct answer immediately |
-| **`agent`** | Needs reasoning/tools | May retrieve from Pinecone, Mem0 memories, enhance prompt, then call Corsair or a normal assistant reply |
+| **`agent`** | Needs reasoning/tools | May retrieve from pgvector, Mem0 memories, enhance prompt, then call Corsair or a normal assistant reply |
 
 For the **`agent`** route, the flag **`runCorsairAgent`** (from `determination.requiresCorsairMcpTool`) decides whether Gmail/Calendar tools are needed.
 
@@ -136,7 +136,7 @@ For the **`agent`** route, the flag **`runCorsairAgent`** (from `determination.r
 
 ```mermaid
 flowchart TD
-    A[executeAgentTurn] --> B{rag.route}
+    A[streamAgentResponseForRagResult] --> B{rag.route}
     B -->|clarify or direct| C[runDirectOrClarifyRoute]
     B -->|agent| D{runCorsairAgent?}
     D -->|No| E[runAssistantReplyRoute]
@@ -216,7 +216,7 @@ sequenceDiagram
     Gmail-->>Svc: Raw API result
     Svc->>Svc: formatApprovalExecutionForChat()
     Svc-->>TRPC: stream deltas + done
-    TRPC->>Chat: finalizeApprovedTurn (append assistant message)
+    TRPC->>Chat: appendApprovalResultAndUpdateMem0 (append assistant message)
     TRPC-->>Page: done event
     Page->>User: Show friendly result
 ```
@@ -270,7 +270,7 @@ flowchart LR
         A[chat_threads]
         B[chat_messages]
         C[corsair_approval_events]
-        D[Pinecone]
+        D[pgvector]
         E[Mem0]
     end
 
@@ -285,7 +285,7 @@ flowchart LR
 |-------|------|
 | `chat_threads` / `chat_messages` | Conversation history; `approvalId` on approval messages |
 | `corsair_approval_events` | Pending/completed actions with parameters, status, result |
-| Pinecone | Retrieved context chunks (when RAG flags require them) |
+| pgvector (`rag_embedding_chunks`) | Embedded message chunks (when RAG flags require them) |
 | Mem0 | Long-term memory (when RAG flags require them) |
 
 ---

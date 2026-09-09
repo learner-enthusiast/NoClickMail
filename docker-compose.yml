@@ -1,6 +1,6 @@
 services:
   postgresdb:
-    image: postgres:15
+    image: pgvector/pgvector:pg15
     restart: unless-stopped
     container_name: postgresdb
 

@@ -8,7 +8,7 @@ const MAX_CONTEXT_CHARS = 12_000;
 /**
  * Build a bounded thread history window for the agent.
  *
- * Separate from Pinecone/Mem0 retrieval — this is recent in-thread
+ * Separate from pgvector/Mem0 retrieval — this is recent in-thread
  * conversation from Postgres, tenant-isolated by userId + threadId.
  */
 export async function buildThreadContext(

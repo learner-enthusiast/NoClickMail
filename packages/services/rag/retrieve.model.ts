@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Number of similar Pinecone chunks retrieved per query. */
+/** Number of similar pgvector chunks retrieved per query. */
 export const RAG_TOP_K = 3;
 
 /** Number of Mem0 long-term memories retrieved per query. */

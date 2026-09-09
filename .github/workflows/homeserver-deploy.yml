@@ -111,7 +111,13 @@ jobs:
           pnpm db:migrate
 
           log "restart orion"
-          bash scripts/restart-orion.sh
+          echo "deploy user: $(whoami)"
+          if [ -f scripts/restart-orion.sh ]; then
+            bash scripts/restart-orion.sh
+          else
+            sudo -n systemctl restart orion
+            sudo -n systemctl is-active orion
+          fi
 
           log "Deploy succeeded (sha=${DEPLOY_SHA})"
           REMOTE
@@ -126,6 +132,11 @@ jobs:
           cd "${DEPLOY_PATH:-.}"
           echo "--- git status ---"
           git status -sb 2>/dev/null || true
+          echo "--- deploy user ---"
+          whoami 2>/dev/null || true
+          id 2>/dev/null || true
+          echo "--- sudo test ---"
+          sudo -n systemctl is-active orion 2>&1 || true
           echo "--- orion service ---"
           sudo systemctl status orion --no-pager -l 2>/dev/null | tail -30 || true
           echo "--- orion logs ---"

@@ -1,15 +1,6 @@
 import { z } from "zod";
 
-/** Pinecone vector record schemas — used by rag/pinecone/index.ts. */
-
-/** Override Pinecone connection — defaults to PINECONE_API_KEY / PINECONE_INDEX env vars. */
-export const pineconeConfigModel = z.object({
-  apiKey: z.string().min(1).optional(),
-  index: z.string().min(1).optional(),
-});
-
-export type PineconeConfigModelType = z.infer<typeof pineconeConfigModel>;
-
+/** Metadata stored alongside each embedded chunk in pgvector. */
 export const vectorMetadataModel = z.object({
   userId: z.string(),
   threadId: z.string(),

@@ -11,7 +11,12 @@ export const requestDeterminationModel = z.object({
   requiresExternalEnhancement: z
     .boolean()
     .describe(
-      "True when the prompt should be enhanced using retrieved Pinecone excerpts and/or Mem0 memories.",
+      "True when the prompt should be enhanced using retrieved pgvector excerpts and/or Mem0 memories.",
+    ),
+  requiresEmailWriterAgent: z
+    .boolean()
+    .describe(
+      "True when the user wants email copy drafted, rewritten, polished, or composed (subject/body/tone), including before a send/reply action.",
     ),
   needsUserClarification: z
     .boolean()
@@ -35,7 +40,12 @@ export type RagRoute = "clarify" | "direct" | "agent";
 
 export function resolveRoute(d: RequestDeterminationModelType): RagRoute {
   if (d.needsUserClarification && d.clarifyingQuestion?.trim()) return "clarify";
-  if (!d.requiresCorsairMcpTool && !d.requiresLongTermMemory && !d.requiresExternalEnhancement) {
+  if (
+    !d.requiresCorsairMcpTool &&
+    !d.requiresLongTermMemory &&
+    !d.requiresExternalEnhancement &&
+    !d.requiresEmailWriterAgent
+  ) {
     return "direct";
   }
   return "agent";

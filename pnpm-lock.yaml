@@ -373,9 +373,6 @@ importers:
       '@openai/agents':
         specifier: ^0.11.6
         version: 0.11.6(ws@8.21.0)(zod@4.4.3)
-      '@pinecone-database/pinecone':
-        specifier: ^8.1.0
-        version: 8.1.0
       '@repo/database':
         specifier: workspace:*
         version: link:../database
@@ -2209,10 +2206,6 @@ packages:
     engines: {node: ^18.19.0 || >=20.6.0}
     peerDependencies:
       '@opentelemetry/api': ^1.1.0
-
-  '@pinecone-database/pinecone@8.1.0':
-    resolution: {integrity: sha512-aSC0u1HqUzOFnqHy4fpw8RD2TQdwaT0nMiYpc07Y8qW4tK59LTO3jTqQIjH1L93c4/cn8rfJCQimXmbtsi2acA==}
-    engines: {node: '>=20.0.0'}
 
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
@@ -8683,8 +8676,6 @@ snapshots:
     dependencies:
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/core': 2.9.0(@opentelemetry/api@1.9.1)
-
-  '@pinecone-database/pinecone@8.1.0': {}
 
   '@protobufjs/aspromise@1.1.2': {}
 

@@ -30,11 +30,8 @@ const envSchema = z.object({
   CLIENT_URL: z.string().default("http://localhost:3000"),
   CORSAIR_CONNECT_REDIRECT_URI: z.preprocess(emptyToUndefined, z.string().url().optional()),
   OPENAI_API_KEY: z.string().min(1),
-  /** Pinecone — optional; RAG pipeline skips when unset */
-  PINECONE_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
-  PINECONE_INDEX: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
-  /** Must match Pinecone index dimension (text-embedding-3-small default is 1536; set 1024 if index uses 1024) */
+  /** Must match rag_embedding_chunks.embedding column dimension (default 1536). */
   OPENAI_EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(1536),
   RAG_CHUNK_SIZE: z.coerce.number().int().positive().default(600),
   RAG_CHUNK_OVERLAP: z.coerce.number().int().nonnegative().default(80),

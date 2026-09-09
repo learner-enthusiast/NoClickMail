@@ -50,6 +50,13 @@
       "when": 1788534000000,
       "tag": "0006_chat_message_approval_id",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788535000000,
+      "tag": "0007_pgvector_rag_embeddings",
+      "breakpoints": true
     }
   ]
 }

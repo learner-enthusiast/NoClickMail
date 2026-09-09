@@ -17,6 +17,7 @@ export const ragRunMetaModel = z.object({
   ranAt: z.string(),
   route: z.enum(["clarify", "direct", "agent"]),
   runCorsairAgent: z.boolean(),
+  runEmailWriterAgent: z.boolean(),
   determination: requestDeterminationModel,
   retrieve: z
     .object({
@@ -64,6 +65,7 @@ export type RagRunMetaModelType = z.infer<typeof ragRunMetaModel>;
 export const ragRunResultModel = z.object({
   route: z.enum(["clarify", "direct", "agent"]),
   runCorsairAgent: z.boolean(),
+  runEmailWriterAgent: z.boolean(),
   assistantMessage: z.string().optional(),
   enhancedPrompt: z.string(),
   retrieved: z.array(retrievedChunkModel),

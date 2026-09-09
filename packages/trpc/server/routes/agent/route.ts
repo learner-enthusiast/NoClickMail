@@ -4,7 +4,7 @@ import { agentProcedure, authenticatedProcedure, router } from "../../trpc";
 import { chatService, ragService } from "../../services";
 import { zodUndefinedModel } from "../../schema";
 import { chatThreadModel, chatMessageModel } from "@repo/services/chat/model";
-import { executeAgentTurn } from "./run-agent-stream";
+import { streamAgentResponseForRagResult } from "./run-agent-stream";
 
 function assertNotAborted(signal: AbortSignal) {
   if (signal.aborted) {
@@ -18,10 +18,12 @@ export const agentsRouter = router({
     .mutation(async function* ({ ctx, input }) {
       assertNotAborted(ctx.signal);
 
+      // Step 1 — resolve thread (create on first message).
       const thread = input.threadId
         ? await chatService.getThreadForUser(ctx.user, input.threadId)
         : await chatService.createThread(ctx.user, input.prompt.slice(0, 60));
 
+      // Step 2 — persist user message to Postgres (full transcript).
       const userMsg = await chatService.appendMessage({
         userId: ctx.user,
         threadId: thread.id,
@@ -31,7 +33,8 @@ export const agentsRouter = router({
 
       assertNotAborted(ctx.signal);
 
-      const rag = await ragService.runForUserMessage(
+      // Step 3 — RAG: determiner + optional pgvector/Mem0 read (no writes yet).
+      const rag = await ragService.classifyAndPrepareAgentContext(
         {
           userId: ctx.user,
           threadId: thread.id,
@@ -43,13 +46,15 @@ export const agentsRouter = router({
 
       assertNotAborted(ctx.signal);
 
+      // Step 4 — stream routing metadata to the client.
       yield {
         type: "meta" as const,
         threadId: thread.id,
         rag: rag.meta,
       };
 
-      const { output, approvalId } = yield* executeAgentTurn({
+      // Step 5 — generate assistant output (Corsair / email writer / direct LLM).
+      const { output, approvalId } = yield* streamAgentResponseForRagResult({
         userId: ctx.user,
         prompt: input.prompt,
         threadId: thread.id,
@@ -60,6 +65,7 @@ export const agentsRouter = router({
 
       assertNotAborted(ctx.signal);
 
+      // Step 6 — persist assistant reply to Postgres.
       const assistantMsg = await chatService.appendMessage({
         userId: ctx.user,
         threadId: thread.id,
@@ -68,10 +74,21 @@ export const agentsRouter = router({
         approvalId,
       });
 
-      await ragService.storeChatTurn({
+      // Step 7 — Mem0 WRITE: queue fact extraction from this completed turn.
+      await ragService.saveTurnToLongTermMemoryIfEnabled({
         userId: ctx.user,
         threadId: thread.id,
         messageId: userMsg.id,
+        userContent: input.prompt,
+        assistantContent: output,
+      });
+
+      // Step 8 — pgvector WRITE: chunk, embed, and store for RAG retrieval.
+      await ragService.indexCompletedTurnForRetrieval({
+        userId: ctx.user,
+        threadId: thread.id,
+        userMessageId: userMsg.id,
+        assistantMessageId: assistantMsg.id,
         userContent: input.prompt,
         assistantContent: output,
       });
