@@ -27,7 +27,6 @@ import CalendarInviteDialog from "../../calendarinvite";
 import { ThinkingBubble } from "./ThinkingBubble";
 import { ChatErrorBubble, ChatMessageBubble } from "./ChatMessageBubble";
 import type { AgentStreamEventModelType } from "@repo/trpc/client";
-import type { RagRunMetaModelType } from "@repo/services/model";
 
 const QUICK_ACTIONS = [
   { label: "Summarize", icon: FileText, prompt: "Summarize the key risks in the selected report." },
@@ -123,22 +122,6 @@ function getErrorMessage(e: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
-function showRagToast(rag: RagRunMetaModelType) {
-  const retrieveMatches = rag.retrieve?.matchCount ?? 0;
-  const memoryMatches = rag.mem0?.matchCount ?? 0;
-  const parts = [
-    `route ${rag.route}`,
-    rag.runCorsairAgent ? "corsair" : null,
-    rag.runEmailWriterAgent ? "email-writer" : null,
-    rag.enhance ? "prompt enhanced" : null,
-    `retrieved ${retrieveMatches}`,
-    `memories ${memoryMatches}`,
-  ].filter(Boolean);
-
-  toast.message("RAG complete", { description: parts.join(" · ") });
-  console.info("[RAG]", rag);
-}
-
 export function Chat() {
   const utils = trpc.useUtils();
   const { mutateAsync, reset, status } = runAgent();
@@ -207,11 +190,8 @@ export function Chat() {
     for await (const event of stream) {
       if (event.type === "meta") {
         resolvedThreadId = event.threadId;
-        setThreadId(event.threadId);
-        if (event.file?.lowConfidence) {
-          toast.message("Attachment extracted with low OCR confidence", {
-            description: event.file.filename,
-          });
+        if (!activeThreadId) {
+          setThreadId(event.threadId);
         }
       } else if (event.type === "approval_created") {
         setStreamingApprovalId(event.approvalId);
@@ -219,9 +199,10 @@ export function Chat() {
         setStreamingAssistant((prev) => (prev ?? "") + event.text);
       } else if (event.type === "done") {
         resolvedThreadId = event.threadId;
-        setThreadId(event.threadId);
+        if (!activeThreadId || activeThreadId !== event.threadId) {
+          setThreadId(event.threadId);
+        }
         if (event.approvalId) setStreamingApprovalId(event.approvalId);
-        showRagToast(event.rag);
       }
     }
 
@@ -232,12 +213,12 @@ export function Chat() {
     }
 
     if (resolvedThreadId) {
-      setPendingUser(null);
-      setStreamingAssistant(null);
-      setStreamingApprovalId(null);
       await utils.agent.threadMessages.invalidate({ threadId: resolvedThreadId });
       await utils.agent.threadMessages.refetch({ threadId: resolvedThreadId });
       await utils.agent.listThreads.invalidate();
+      setPendingUser(null);
+      setStreamingAssistant(null);
+      setStreamingApprovalId(null);
     }
   }
 
