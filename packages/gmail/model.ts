@@ -47,13 +47,26 @@ export const gmailMessageDetailModel = gmailMessageSummaryModel.extend({
 });
 export type GmailMessageDetailType = z.infer<typeof gmailMessageDetailModel>;
 
-/** POST /gmail/send */
+/** POST /gmail/send — OpenAPI-safe (attachments use the approval flow, not this route). */
 export const sendMessageInputModel = z.object({
   to: z.string().describe("Recipient email"),
   subject: z.string().describe("Subject line"),
   body: z.string().describe("Plain-text body"),
 });
 export type SendMessageInputModelType = z.infer<typeof sendMessageInputModel>;
+
+/** Runtime attachment payload for internal send (Buffer cannot be represented in OpenAPI). */
+export const sendMessageRuntimeAttachmentModel = z.object({
+  filename: z.string().min(1),
+  mimeType: z.string().min(1),
+  content: z.instanceof(Buffer),
+});
+
+/** Internal send input including attachment buffers (Corsair approval execution). */
+export const sendMessageRuntimeInputModel = sendMessageInputModel.extend({
+  attachments: z.array(sendMessageRuntimeAttachmentModel).optional(),
+});
+export type SendMessageRuntimeInputModelType = z.infer<typeof sendMessageRuntimeInputModel>;
 
 export const sendMessageOutputModel = z.object({
   id: z.string(),

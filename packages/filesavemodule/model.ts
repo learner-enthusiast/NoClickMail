@@ -18,6 +18,8 @@ export const s3UploadInputModel = z.object({
   region: z.string().min(1).optional().describe("Defaults to AWS_REGION"),
   accessKeyId: z.string().min(1).optional().describe("Defaults to AWS_ACCESS_KEY_ID"),
   secretAccessKey: z.string().min(1).optional().describe("Defaults to AWS_SECRET_ACCESS_KEY"),
+  endpoint: z.string().url().optional().describe("Custom S3 endpoint (MinIO, LocalStack)"),
+  forcePathStyle: z.boolean().optional().describe("Path-style URLs for local S3 emulators"),
   publicBaseUrl: z
     .string()
     .url()

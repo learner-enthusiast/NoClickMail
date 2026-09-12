@@ -11,6 +11,11 @@ const envSchema = z.object({
   AWS_SECRET_ACCESS_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   AWS_REGION: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   AWS_S3_BUCKET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  AWS_S3_ENDPOINT: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  AWS_S3_FORCE_PATH_STYLE: z.preprocess(
+    emptyToUndefined,
+    z.enum(["true", "false"]).optional(),
+  ),
   AWS_S3_PUBLIC_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
   R2_ACCOUNT_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   R2_ACCESS_KEY_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),

@@ -14,6 +14,15 @@ export const gmailCorsairActionValues = [
 
 export type GmailCorsairAction = (typeof gmailCorsairActionValues)[number];
 
+export interface GmailAttachmentRef {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  storageKey: string;
+  url?: string;
+}
+
 export interface GmailCorsairParameters {
   messageId?: string;
   threadId?: string;
@@ -25,6 +34,8 @@ export interface GmailCorsairParameters {
 
   subject?: string;
   body?: string;
+
+  attachments?: GmailAttachmentRef[];
 
   inReplyTo?: string;
 

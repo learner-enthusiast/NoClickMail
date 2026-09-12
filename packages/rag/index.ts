@@ -29,6 +29,7 @@ import {
 } from "@repo/rag-models/retrieve.model";
 import type { UpsertVectorInputModelType } from "@repo/rag-models/vector-store.model";
 import { resolvePgVectorWhenUnsure } from "./document-retrieval-policy";
+import { resolveEditApprovalWithoutCorsair } from "./approval-edit-routing-policy";
 
 /** Inputs shared by the full agent-route pipeline (retrieve → enhance → execute). */
 type AgentRouteContext = {
@@ -37,6 +38,7 @@ type AgentRouteContext = {
   route: RagRunResultModelType["route"];
   runCorsairAgent: boolean;
   runEmailWriterAgent: boolean;
+  runEditPendingApproval: boolean;
   determination: RequestDeterminationModelType;
   history: ThreadContextMessageModelType[];
   signal?: AbortSignal;
@@ -246,6 +248,7 @@ class RagService {
       route,
       runCorsairAgent: false,
       runEmailWriterAgent: false,
+      runEditPendingApproval: false,
       assistantMessage,
       enhancedPrompt: input.prompt,
       retrieved: [],
@@ -256,6 +259,7 @@ class RagService {
         route,
         runCorsairAgent: false,
         runEmailWriterAgent: false,
+        runEditPendingApproval: false,
         determination,
         context: this.contextStats(history),
       },
@@ -298,7 +302,7 @@ class RagService {
   }
 
   private buildAgentMeta(ctx: AgentRouteContext, fetch: AgentContextFetch): RagRunMetaModelType {
-    const { input, ranAt, route, runCorsairAgent, runEmailWriterAgent, determination, history } =
+    const { input, ranAt, route, runCorsairAgent, runEmailWriterAgent, runEditPendingApproval, determination, history } =
       ctx;
     const { retrieved, longTermMemories, enhancedPrompt, shouldEnhance } = fetch;
 
@@ -307,6 +311,7 @@ class RagService {
       route,
       runCorsairAgent,
       runEmailWriterAgent,
+      runEditPendingApproval,
       determination,
       retrieve:
         determination.requiresPgVectorRetrieval && this.isPgVectorEnabled()
@@ -351,6 +356,7 @@ class RagService {
       route,
       runCorsairAgent,
       runEmailWriterAgent,
+      runEditPendingApproval,
       determination,
       history,
       signal,
@@ -386,6 +392,7 @@ class RagService {
       route,
       runCorsairAgent,
       runEmailWriterAgent,
+      runEditPendingApproval,
       retrieveMatches: retrieved.length,
       mem0Matches: longTermMemories.length,
     });
@@ -394,6 +401,7 @@ class RagService {
       route,
       runCorsairAgent,
       runEmailWriterAgent,
+      runEditPendingApproval,
       enhancedPrompt,
       retrieved,
       longTermMemories,
@@ -432,10 +440,12 @@ class RagService {
     });
 
     determination = resolvePgVectorWhenUnsure(input.prompt, history, determination);
+    determination = resolveEditApprovalWithoutCorsair(input.prompt, history, determination);
 
     const route = resolveRoute(determination);
     const runCorsairAgent = determination.requiresCorsairMcpTool;
     const runEmailWriterAgent = determination.requiresEmailWriterAgent;
+    const runEditPendingApproval = determination.requiresEditPendingApproval;
 
     logger.info("RAG determiner decision", {
       userId: input.userId,
@@ -443,6 +453,7 @@ class RagService {
       route,
       runCorsairAgent,
       runEmailWriterAgent,
+      runEditPendingApproval,
       ...determination,
     });
 
@@ -478,6 +489,7 @@ class RagService {
       route,
       runCorsairAgent,
       runEmailWriterAgent,
+      runEditPendingApproval,
       determination,
       history,
       signal,

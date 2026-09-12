@@ -9,6 +9,14 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@repo/gmail": "workspace:*", "@repo/calendar": "workspace:*", "@repo/rag-models": "workspace:*", "@repo/corsair-agent": "workspace:*", "@repo/openai-client": "workspace:*", "@repo/error": "workspace:*", "@repo/database": "workspace:*", "zod": "^4.3.5"
+    "@repo/gmail": "workspace:*",
+    "@repo/calendar": "workspace:*",
+    "@repo/rag-models": "workspace:*",
+    "@repo/corsair-agent": "workspace:*",
+    "@repo/openai-client": "workspace:*",
+    "@repo/error": "workspace:*",
+    "@repo/database": "workspace:*",
+    "@repo/filesavemodule": "workspace:*",
+    "zod": "^4.3.5"
   }
 }

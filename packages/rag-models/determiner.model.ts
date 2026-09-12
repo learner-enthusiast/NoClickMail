@@ -21,6 +21,11 @@ export const requestDeterminationModel = z.object({
     .describe(
       "True when the user wants email copy drafted, rewritten, polished, or composed (subject/body/tone), including before a send/reply action.",
     ),
+  requiresEditPendingApproval: z
+    .boolean()
+    .describe(
+      "True when the user wants to change subject/body/recipient/signature on a pending approval already created in this thread, without sending yet.",
+    ),
   needsUserClarification: z
     .boolean()
     .describe("True when the request is ambiguous and a clarifying question must be asked first."),
@@ -48,7 +53,8 @@ export function resolveRoute(d: RequestDeterminationModelType): RagRoute {
     !d.requiresLongTermMemory &&
     !d.requiresPgVectorRetrieval &&
     !d.requiresExternalEnhancement &&
-    !d.requiresEmailWriterAgent
+    !d.requiresEmailWriterAgent &&
+    !d.requiresEditPendingApproval
   ) {
     return "direct";
   }

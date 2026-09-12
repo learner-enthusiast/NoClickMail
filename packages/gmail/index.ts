@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { ensureOAuthAccessToken, withCorsairTenant } from "@repo/corsair";
 import { AppError, httpStatusFromError } from "@repo/error";
 import type {
@@ -25,8 +26,8 @@ import type {
   MarkMessageReadOutputModelType,
   RestoreMessageInputModelType,
   RestoreMessageOutputModelType,
-  SendMessageInputModelType,
   SendMessageOutputModelType,
+  SendMessageRuntimeInputModelType,
 } from "./model";
 
 type GmailMessage = {
@@ -134,7 +135,7 @@ class GmailService {
 
   async sendMessage(
     tenantId: string,
-    input: SendMessageInputModelType,
+    input: SendMessageRuntimeInputModelType,
   ): Promise<SendMessageOutputModelType> {
     return withGmail(async () => {
       const raw = this.buildRawMessage(input);
@@ -190,16 +191,48 @@ class GmailService {
     return Buffer.from(data, "base64url").toString("utf8");
   }
 
-  private buildRawMessage(input: SendMessageInputModelType): string {
-    const message = [
+  private buildRawMessage(input: SendMessageRuntimeInputModelType): string {
+    const attachments = input.attachments ?? [];
+
+    if (attachments.length === 0) {
+      const message = [
+        "MIME-Version: 1.0",
+        `To: ${input.to}`,
+        `Subject: ${input.subject}`,
+        "Content-Type: text/plain; charset=UTF-8",
+        "",
+        input.body,
+      ].join("\r\n");
+      return Buffer.from(message).toString("base64url");
+    }
+
+    const boundary = `----=_Part_${randomBytes(16).toString("hex")}`;
+    const parts: string[] = [
       "MIME-Version: 1.0",
       `To: ${input.to}`,
       `Subject: ${input.subject}`,
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      "",
+      `--${boundary}`,
       "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 7bit",
       "",
       input.body,
-    ].join("\r\n");
-    return Buffer.from(message).toString("base64url");
+    ];
+
+    for (const attachment of attachments) {
+      parts.push(
+        `--${boundary}`,
+        `Content-Type: ${attachment.mimeType}; name="${attachment.filename}"`,
+        "Content-Transfer-Encoding: base64",
+        `Content-Disposition: attachment; filename="${attachment.filename}"`,
+        "",
+        attachment.content.toString("base64"),
+      );
+    }
+
+    parts.push(`--${boundary}--`, "");
+    return Buffer.from(parts.join("\r\n")).toString("base64url");
   }
   async listSentContacts(
     tenantId: string,

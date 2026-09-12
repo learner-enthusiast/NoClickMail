@@ -84,17 +84,30 @@ function UserMessageBody({
   );
 }
 
+const APPROVAL_LINK_RE = /\/approval\/([0-9a-f-]{36})/gi;
+
+function extractApprovalIds(content: string): string[] {
+  const ids = [...content.matchAll(APPROVAL_LINK_RE)].map((match) => match[1]!);
+  return [...new Set(ids)];
+}
+
 export function ChatMessageBubble({
   role,
   content,
   approvalId,
+  approvalIds: approvalIdsProp,
 }: {
   role: "user" | "assistant";
   content: string;
   approvalId?: string | null;
+  approvalIds?: string[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const isUser = role === "user";
+  const fromContent = extractApprovalIds(content);
+  const approvalIds = [
+    ...new Set([...(approvalIdsProp ?? []), ...fromContent, ...(approvalId ? [approvalId] : [])]),
+  ];
 
   return (
     <div
@@ -111,10 +124,10 @@ export function ChatMessageBubble({
           isUser ? "left-1.5" : "right-1.5",
         )}
       >
-        {approvalId ? (
+        {approvalIds.length > 0 ? (
           <CopyButton
-            text={approvalId}
-            label="Approval ID copied"
+            text={approvalIds.join("\n")}
+            label="Approval IDs copied"
             className={cn(isUser ? "text-primary-foreground hover:bg-primary-foreground/10" : "")}
           />
         ) : (
@@ -136,16 +149,18 @@ export function ChatMessageBubble({
           <ChatMarkdown content={content} invert={false} />
         )}
 
-        {approvalId && (
+        {approvalIds.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Link
-              href={`/approval/${approvalId}`}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
-            >
-              <ExternalLink className="size-3.5" />
-              Review approval
-            </Link>
-            <span className="text-xs text-muted-foreground">ID: {approvalId.slice(0, 8)}…</span>
+            {approvalIds.map((id, index) => (
+              <Link
+                key={id}
+                href={`/approval/${id}`}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                <ExternalLink className="size-3.5" />
+                {approvalIds.length > 1 ? `Review email ${index + 1}` : "Review approval"}
+              </Link>
+            ))}
           </div>
         )}
       </div>

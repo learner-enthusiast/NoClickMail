@@ -4,9 +4,12 @@ import { agentProcedure, authenticatedProcedure, router } from "../../trpc";
 import { chatService, corsairApprovalService, ragService } from "../../services";
 import { toTRPCError } from "../../map-error";
 import {
+  corsairApprovalApproveInputModel,
   corsairApprovalListPaginationInputModel,
   corsairApprovalModel,
   corsairApprovalPaginatedListOutputModel,
+  corsairApprovalUpdateDraftInputModel,
+  corsairApprovalUploadAttachmentInputModel,
 } from "@repo/services/model";
 
 function assertNotAborted(signal: AbortSignal) {
@@ -123,12 +126,36 @@ export const corsairApprovalsRouter = router({
       return corsairApprovalService.serialize(row);
     }),
 
-  approve: agentProcedure.input(z.object({ approvalId: z.uuid() })).mutation(async function* ({
+  updateDraft: agentProcedure
+    .input(corsairApprovalUpdateDraftInputModel)
+    .output(corsairApprovalModel)
+    .mutation(async ({ ctx, input }) => {
+      const row = await corsairApprovalService.applyDraftEdits(
+        ctx.user,
+        input.approvalId,
+        input.draft,
+      );
+      return corsairApprovalService.serialize(row);
+    }),
+
+  uploadAttachment: agentProcedure
+    .input(corsairApprovalUploadAttachmentInputModel)
+    .output(corsairApprovalModel)
+    .mutation(async ({ ctx, input }) => {
+      const row = await corsairApprovalService.uploadAttachment(ctx.user, input);
+      return corsairApprovalService.serialize(row);
+    }),
+
+  approve: agentProcedure.input(corsairApprovalApproveInputModel).mutation(async function* ({
     ctx,
     input,
   }) {
     try {
       assertNotAborted(ctx.signal);
+
+      if (input.draft) {
+        await corsairApprovalService.applyDraftEdits(ctx.user, input.approvalId, input.draft);
+      }
 
       for await (const event of corsairApprovalService.executeStream(
         ctx.user,

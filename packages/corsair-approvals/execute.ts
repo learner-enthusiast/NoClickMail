@@ -8,6 +8,7 @@ import CalendarService from "@repo/calendar";
 import type { ListEventsInputModelType } from "@repo/calendar/model";
 import TenantCorsairAgent from "@repo/corsair-agent";
 import { badRequest } from "@repo/error";
+import { downloadAttachmentsForSend, normalizeAttachments } from "./attachments";
 import { extractGmailSendFields, hasGmailSendFields } from "./planner";
 
 const gmailService = new GmailService();
@@ -68,8 +69,19 @@ async function executeGmailSend(
     );
   }
 
-  await gmailService.sendMessage(userId, sendFields);
-  return `Your email to ${sendFields.to} with subject "${sendFields.subject}" was sent successfully.`;
+  const attachmentRefs = normalizeAttachments(parameters);
+  const attachments = await downloadAttachmentsForSend(attachmentRefs);
+
+  await gmailService.sendMessage(userId, {
+    ...sendFields,
+    attachments: attachments.length > 0 ? attachments : undefined,
+  });
+
+  const attachmentNote =
+    attachmentRefs.length > 0
+      ? ` with ${attachmentRefs.length} attachment${attachmentRefs.length === 1 ? "" : "s"}`
+      : "";
+  return `Your email to ${sendFields.to} with subject "${sendFields.subject}"${attachmentNote} was sent successfully.`;
 }
 
 async function executeGmailWithAgent(

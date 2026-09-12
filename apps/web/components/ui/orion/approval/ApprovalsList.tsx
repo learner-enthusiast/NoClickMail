@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -24,6 +24,7 @@ import {
   corsairRejectedApprovals,
 } from "~/hooks/corsair-approvals.ts";
 import { useApprovalRetry } from "~/hooks/corsair-approvals.ts/use-approval-execution";
+import { trpc } from "~/trpc/client";
 import type { RouterOutputs } from "@repo/trpc/client";
 
 const PAGE_SIZE = 20;
@@ -173,10 +174,19 @@ function ApprovalRow({ approval }: { approval: ApprovalItem }) {
 }
 
 export function ApprovalsList() {
+  const utils = trpc.useUtils();
   const [status, setStatus] = useState<ApprovalStatusTab>("pending");
   const [page, setPage] = useState(1);
 
-  const { data, isPending, isError, error } = useApprovalsForStatus(status, page);
+  const { data, isPending, isError, error, isFetching } = useApprovalsForStatus(status, page);
+
+  useEffect(() => {
+    void utils.corsairApprovals.listPending.invalidate();
+    void utils.corsairApprovals.listCompleted.invalidate();
+    void utils.corsairApprovals.listRejected.invalidate();
+    void utils.corsairApprovals.listExpired.invalidate();
+    void utils.corsairApprovals.listFailed.invalidate();
+  }, [utils]);
 
   function selectStatus(next: ApprovalStatusTab) {
     setStatus(next);
@@ -210,10 +220,17 @@ export function ApprovalsList() {
       </div>
 
       <div className="mt-6 min-h-0 flex-1 overflow-y-auto">
-        {isPending && (
+        {isPending && !data && (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
             <Loader2 className="mr-2 size-5 animate-spin" />
             <span className="text-body-md">Loading approvals…</span>
+          </div>
+        )}
+
+        {isFetching && data && (
+          <div className="mb-3 flex items-center gap-2 text-body-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            Refreshing…
           </div>
         )}
 

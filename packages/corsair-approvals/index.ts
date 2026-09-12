@@ -12,25 +12,74 @@ import {
   planCorsairActionFromRag,
   compactPlannedParameters,
   ensureExecutablePlannedAction,
+  extractGmailSendFields,
   requiresCorsairApproval,
   type PlannedCorsairAction,
 } from "./planner";
+import {
+  collectSendRecipients,
+  resolvePerRecipientSendDrafts,
+  shouldSplitGmailSendApprovals,
+  splitPlannedSendByRecipient,
+} from "./split-send";
 
 export { requiresCorsairApproval } from "./planner";
+export {
+  collectSendRecipients,
+  shouldSplitGmailSendApprovals,
+  splitPlannedSendByRecipient,
+  resolvePerRecipientSendDrafts,
+  wantsIndividualSends,
+} from "./split-send";
 import { formatApprovalExecutionForChat } from "./format-chat";
 import { executeApprovedCorsairEventStream } from "./execute";
+import {
+  formatApprovalUpdatedMessage,
+  formatMultipleApprovalsUpdatedMessage,
+  planApprovalEditsFromChat,
+  resolveApprovalsToEdit,
+} from "./edit-from-chat";
+import type { ThreadContextMessageModelType } from "@repo/rag-models/context.model";
 import type {
   CorsairApprovalListPaginationInputModelType,
   CorsairApprovalPaginatedListOutputModelType,
+  CorsairApprovalDraftEditModelType,
 } from "./model";
+import {
+  assertAttachmentSizeLimits,
+  copyAttachmentToApproval,
+  mergeAttachmentEdits,
+  normalizeAttachments,
+  uploadApprovalAttachment,
+  uploadChatFileToApproval,
+} from "./attachments";
 
 const APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
 
-export function formatApprovalCreatedMessage(approvalId: string): string {
+export function formatApprovalCreatedMessage(
+  approval: string | Array<{ id: string; to?: string }>,
+): string {
+  if (typeof approval === "string") {
+    return (
+      "I've created an approval request for your requested action.\n\n" +
+      `[Review approval](/approval/${approval})\n\n` +
+      "Review the details and approve or reject before sending."
+    );
+  }
+
+  if (approval.length === 1) {
+    return formatApprovalCreatedMessage(approval[0]!.id);
+  }
+
+  const lines = approval.map((item, index) => {
+    const label = item.to ? `Send to ${item.to}` : `Email ${index + 1}`;
+    return `${index + 1}. ${label} — [Review approval](/approval/${item.id})`;
+  });
+
   return (
-    "I've created an approval request for your requested action.\n\n" +
-    `Approval ID: ${approvalId}\n\n` +
-    "Review the details and approve or reject using the link below."
+    `I've created ${approval.length} separate approval requests — one email per recipient.\n\n` +
+    `${lines.join("\n")}\n\n` +
+    "Review and approve each email individually before sending."
   );
 }
 
@@ -202,6 +251,88 @@ class CorsairApprovalService {
     return this.listPaginatedByStatusForUser(userId, "failed", input);
   }
 
+  async listPendingForThread(userId: string, threadId: string) {
+    const rows = await db
+      .select()
+      .from(corsairApprovalEvents)
+      .where(
+        and(
+          eq(corsairApprovalEvents.userId, userId),
+          eq(corsairApprovalEvents.status, "pending"),
+          gt(corsairApprovalEvents.expiresAt, new Date()),
+        ),
+      )
+      .orderBy(desc(corsairApprovalEvents.createdAt));
+
+    return rows.filter((row) => {
+      const params = row.parameters as Record<string, unknown>;
+      return params.threadId === threadId;
+    });
+  }
+
+  async editPendingApprovalFromChat(input: {
+    userId: string;
+    threadId: string;
+    prompt: string;
+    history: ThreadContextMessageModelType[];
+    signal?: AbortSignal;
+  }): Promise<{ output: string; approvalId?: string }> {
+    const pendingInThread = await this.listPendingForThread(input.userId, input.threadId);
+    const gmailPending = pendingInThread.filter(
+      (row) => row.service === "gmail" && row.action === "send",
+    );
+
+    const resolved = resolveApprovalsToEdit({
+      prompt: input.prompt,
+      history: input.history,
+      pendingInThread: gmailPending.length > 0 ? gmailPending : pendingInThread,
+    });
+
+    if ("clarify" in resolved) {
+      return { output: resolved.clarify };
+    }
+
+    const updated: Array<{ id: string; to?: string; subject?: string }> = [];
+
+    for (const approval of resolved.approvals) {
+      const fields = extractGmailSendFields(approval.parameters as Record<string, unknown>);
+      if (!fields) {
+        return {
+          output:
+            "That approval isn't a Gmail send draft I can edit from chat yet. Open it on the approval page to review.",
+        };
+      }
+
+      const draft = await planApprovalEditsFromChat({
+        prompt: input.prompt,
+        current: fields,
+        signal: input.signal,
+      });
+
+      if (!draft.to && !draft.subject && !draft.body) {
+        return {
+          output:
+            "I couldn't tell what to change. Try: \"edit the approval to add my address as … and email as …\" or mention the recipient/subject.",
+        };
+      }
+
+      const row = await this.applyDraftEdits(input.userId, approval.id, draft);
+      const updatedFields = extractGmailSendFields(row.parameters as Record<string, unknown>);
+      updated.push({
+        id: row.id,
+        to: updatedFields?.to,
+        subject: updatedFields?.subject,
+      });
+    }
+
+    const output =
+      updated.length === 1
+        ? formatApprovalUpdatedMessage(updated[0]!)
+        : formatMultipleApprovalsUpdatedMessage(updated);
+
+    return { output, approvalId: updated[0]?.id };
+  }
+
   async planFromRag(input: {
     prompt: string;
     rag: RagRunResultModelType;
@@ -277,6 +408,167 @@ class CorsairApprovalService {
     return row!;
   }
 
+  getSendRecipientsForSplit(prompt: string, planned: PlannedCorsairAction): string[] {
+    const compact = compactPlannedParameters(planned.parameters);
+    return collectSendRecipients(prompt, compact);
+  }
+
+  shouldSplitSendApprovals(planned: PlannedCorsairAction, prompt: string): boolean {
+    return shouldSplitGmailSendApprovals(planned, prompt);
+  }
+
+  async createSplitSendApprovalsFromPlanned(input: {
+    userId: string;
+    prompt: string;
+    planned: PlannedCorsairAction;
+    baseParameters: CorsairEvent["parameters"];
+    recipients: string[];
+    emailDraft?: string;
+  }) {
+    const compact = compactPlannedParameters(input.planned.parameters);
+    const fallbackSubject =
+      typeof compact.subject === "string" ? compact.subject : undefined;
+    const fallbackBody = typeof compact.body === "string" ? compact.body : undefined;
+
+    const drafts = resolvePerRecipientSendDrafts({
+      prompt: input.prompt,
+      recipients: input.recipients,
+      emailDraft: input.emailDraft,
+      fallbackSubject,
+      fallbackBody,
+    });
+
+    const plannedActions = splitPlannedSendByRecipient(input.planned, drafts);
+    const baseParams = input.baseParameters as Record<string, unknown>;
+    const baseAttachments = normalizeAttachments(baseParams);
+
+    const approvals = [];
+    for (const perRecipientPlanned of plannedActions) {
+      const recipient = perRecipientPlanned.parameters.to?.[0];
+      let parameters: Record<string, unknown> = {
+        ...baseParams,
+        ...compactPlannedParameters(perRecipientPlanned.parameters),
+        to: recipient ? [recipient] : [],
+        subject: perRecipientPlanned.parameters.subject,
+        body: perRecipientPlanned.parameters.body,
+      };
+
+      const approval = await this.createFromPlanned({
+        userId: input.userId,
+        planned: perRecipientPlanned,
+        parameters,
+      });
+
+      if (baseAttachments.length > 0) {
+        const copied = await Promise.all(
+          baseAttachments.map((source) =>
+            copyAttachmentToApproval({
+              userId: input.userId,
+              approvalId: approval.id,
+              source,
+            }),
+          ),
+        );
+        parameters = { ...parameters, attachments: copied };
+        const [updated] = await db
+          .update(corsairApprovalEvents)
+          .set({ parameters, updatedAt: new Date() })
+          .where(eq(corsairApprovalEvents.id, approval.id))
+          .returning();
+        approvals.push(updated ?? approval);
+      } else {
+        approvals.push(approval);
+      }
+    }
+
+    return approvals;
+  }
+
+  async syncChatFileToApprovals(input: {
+    userId: string;
+    approvals: CorsairEvent[];
+    attachedFile: { filename: string; mimeType?: string; data: string };
+  }) {
+    const body = Buffer.from(input.attachedFile.data, "base64");
+
+    for (const approval of input.approvals) {
+      const ref = await uploadChatFileToApproval({
+        userId: input.userId,
+        approvalId: approval.id,
+        filename: input.attachedFile.filename,
+        mimeType: input.attachedFile.mimeType,
+        body,
+      });
+
+      const parameters = {
+        ...(approval.parameters as Record<string, unknown>),
+        attachments: [ref],
+      };
+
+      await db
+        .update(corsairApprovalEvents)
+        .set({ parameters, updatedAt: new Date() })
+        .where(eq(corsairApprovalEvents.id, approval.id));
+    }
+  }
+
+  async syncChatFileToApproval(input: {
+    userId: string;
+    approvalId: string;
+    attachedFile: { filename: string; mimeType?: string; data: string };
+  }) {
+    const approval = await this.getForUser(input.userId, input.approvalId);
+    await this.syncChatFileToApprovals({
+      userId: input.userId,
+      approvals: [approval],
+      attachedFile: input.attachedFile,
+    });
+    return this.getForUser(input.userId, input.approvalId);
+  }
+
+  async uploadAttachment(
+    userId: string,
+    input: {
+      approvalId: string;
+      filename: string;
+      mimeType?: string;
+      data: string;
+    },
+  ) {
+    const approval = await this.getForUser(userId, input.approvalId);
+    if (approval.status !== "pending") {
+      throw badRequest(`Cannot attach files to approval in status "${approval.status}"`);
+    }
+    if (approval.service !== "gmail" || approval.action !== "send") {
+      throw badRequest("Attachments are only supported for Gmail send approvals.");
+    }
+
+    const body = Buffer.from(input.data, "base64");
+    const existing = normalizeAttachments(approval.parameters as Record<string, unknown>);
+    assertAttachmentSizeLimits(existing, body.length);
+
+    const ref = await uploadApprovalAttachment({
+      userId,
+      approvalId: input.approvalId,
+      filename: input.filename,
+      mimeType: input.mimeType,
+      body,
+    });
+
+    const parameters = {
+      ...(approval.parameters as Record<string, unknown>),
+      attachments: [...existing, ref],
+    };
+
+    const [row] = await db
+      .update(corsairApprovalEvents)
+      .set({ parameters, updatedAt: new Date() })
+      .where(eq(corsairApprovalEvents.id, input.approvalId))
+      .returning();
+
+    return row!;
+  }
+
   async createFromRag(input: {
     userId: string;
     prompt: string;
@@ -321,6 +613,55 @@ class CorsairApprovalService {
         .where(eq(corsairApprovalEvents.id, approval.id));
       throw badRequest("Approval has expired");
     }
+  }
+
+  async applyDraftEdits(
+    userId: string,
+    approvalId: string,
+    draft: CorsairApprovalDraftEditModelType,
+  ) {
+    const approval = await this.getForUser(userId, approvalId);
+    if (approval.status !== "pending") {
+      throw badRequest(`Cannot edit approval in status "${approval.status}"`);
+    }
+
+    const parameters = { ...(approval.parameters as Record<string, unknown>) };
+    const hasDraftField =
+      draft.to !== undefined ||
+      draft.subject !== undefined ||
+      draft.body !== undefined ||
+      draft.attachments !== undefined ||
+      (draft.removeAttachmentIds?.length ?? 0) > 0;
+    if (!hasDraftField) return approval;
+
+    if (draft.to !== undefined) {
+      const trimmed = draft.to.trim();
+      parameters.to = trimmed ? [trimmed] : [];
+    }
+    if (draft.subject !== undefined) {
+      parameters.subject = draft.subject;
+    }
+    if (draft.body !== undefined) {
+      parameters.body = draft.body;
+    }
+
+    if (draft.attachments !== undefined || (draft.removeAttachmentIds?.length ?? 0) > 0) {
+      const existing = normalizeAttachments(parameters);
+      parameters.attachments = mergeAttachmentEdits(existing, draft);
+    }
+
+    const sendFields = extractGmailSendFields(parameters);
+    if (!sendFields) {
+      throw badRequest("Email requires recipient, subject, and body before sending.");
+    }
+
+    const [row] = await db
+      .update(corsairApprovalEvents)
+      .set({ parameters, updatedAt: new Date() })
+      .where(eq(corsairApprovalEvents.id, approvalId))
+      .returning();
+
+    return row!;
   }
 
   async reject(userId: string, approvalId: string) {

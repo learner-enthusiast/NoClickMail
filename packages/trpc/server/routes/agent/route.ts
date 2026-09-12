@@ -143,6 +143,13 @@ export const agentsRouter = router({
       messageId: userMsg.id,
       rag,
       signal: ctx.signal,
+      attachedFile: parsed.file
+        ? {
+            filename: parsed.file.filename,
+            mimeType: parsed.file.mimeType,
+            data: parsed.file.data,
+          }
+        : undefined,
     });
 
     assertNotAborted(ctx.signal);

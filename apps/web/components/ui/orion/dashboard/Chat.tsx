@@ -52,7 +52,7 @@ function Transcript({
   pendingUser,
   isBusy,
   streamingAssistant,
-  streamingApprovalId,
+  streamingApprovalIds,
   errorMessage,
   scrollRef,
 }: {
@@ -60,7 +60,7 @@ function Transcript({
   pendingUser: string | null;
   isBusy: boolean;
   streamingAssistant: string | null;
-  streamingApprovalId: string | null;
+  streamingApprovalIds: string[];
   errorMessage: string | null;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
@@ -74,7 +74,7 @@ function Transcript({
     requestAnimationFrame(() =>
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }),
     );
-  }, [messages, pendingUser, isBusy, streamingAssistant, streamingApprovalId, errorMessage, scrollRef]);
+  }, [messages, pendingUser, isBusy, streamingAssistant, streamingApprovalIds, errorMessage, scrollRef]);
 
   const showInitialLoading =
     threadId !== null && isPending && !messages?.length && !showPendingUser && !isBusy;
@@ -107,7 +107,7 @@ function Transcript({
         <ChatMessageBubble
           role="assistant"
           content={streamingAssistant}
-          approvalId={streamingApprovalId}
+          approvalIds={streamingApprovalIds}
         />
       )}
       {errorMessage && !isBusy && <ChatErrorBubble message={errorMessage} />}
@@ -131,7 +131,7 @@ export function Chat() {
   const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [streamingAssistant, setStreamingAssistant] = useState<string | null>(null);
-  const [streamingApprovalId, setStreamingApprovalId] = useState<string | null>(null);
+  const [streamingApprovalIds, setStreamingApprovalIds] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [attachedFile, setAttachedFile] = useState<AttachedAgentFile | null>(null);
 
@@ -194,7 +194,10 @@ export function Chat() {
           setThreadId(event.threadId);
         }
       } else if (event.type === "approval_created") {
-        setStreamingApprovalId(event.approvalId);
+        setStreamingApprovalIds((prev) =>
+          prev.includes(event.approvalId) ? prev : [...prev, event.approvalId],
+        );
+        void utils.corsairApprovals.listPending.invalidate();
       } else if (event.type === "delta") {
         setStreamingAssistant((prev) => (prev ?? "") + event.text);
       } else if (event.type === "done") {
@@ -202,7 +205,11 @@ export function Chat() {
         if (!activeThreadId || activeThreadId !== event.threadId) {
           setThreadId(event.threadId);
         }
-        if (event.approvalId) setStreamingApprovalId(event.approvalId);
+        if (event.approvalId) {
+          setStreamingApprovalIds((prev) =>
+            prev.includes(event.approvalId!) ? prev : [...prev, event.approvalId!],
+          );
+        }
       }
     }
 
@@ -218,7 +225,7 @@ export function Chat() {
       await utils.agent.listThreads.invalidate();
       setPendingUser(null);
       setStreamingAssistant(null);
-      setStreamingApprovalId(null);
+      setStreamingApprovalIds([]);
     }
   }
 
@@ -234,7 +241,7 @@ export function Chat() {
     const displayUser = file && !text ? `📎 ${file.filename}` : text;
     setPendingUser(displayUser);
     setStreamingAssistant(null);
-    setStreamingApprovalId(null);
+    setStreamingApprovalIds([]);
     setErrorMessage(null);
 
     const activeThreadId = threadId;
@@ -270,7 +277,7 @@ export function Chat() {
         }
         toast.message("Stopped");
         setStreamingAssistant(null);
-        setStreamingApprovalId(null);
+        setStreamingApprovalIds([]);
         await syncThreadMessages(activeThreadId);
         setPendingUser(null);
         return;
@@ -280,7 +287,7 @@ export function Chat() {
       const message = getErrorMessage(e);
       setErrorMessage(message);
       setStreamingAssistant(null);
-      setStreamingApprovalId(null);
+      setStreamingApprovalIds([]);
       toast.error(message);
 
       const syncedId = await syncThreadMessages(activeThreadId);
@@ -303,7 +310,7 @@ export function Chat() {
   function stopGeneration() {
     agentAbort.abort();
     setStreamingAssistant(null);
-    setStreamingApprovalId(null);
+    setStreamingApprovalIds([]);
     reset();
   }
 
@@ -389,7 +396,7 @@ export function Chat() {
           pendingUser={pendingUser}
           isBusy={isBusy}
           streamingAssistant={streamingAssistant}
-          streamingApprovalId={streamingApprovalId}
+          streamingApprovalIds={streamingApprovalIds}
           errorMessage={errorMessage}
           scrollRef={scrollRef}
         />

@@ -10,6 +10,7 @@ export type RunAgentStreamEvent = RunAgentStreamDelta | RunAgentStreamApproval;
 type RunAgentExecution = {
   output: string;
   approvalId?: string;
+  approvalIds?: string[];
 };
 
 type RunRagPipelineInput = {
@@ -19,6 +20,11 @@ type RunRagPipelineInput = {
   messageId: string;
   rag: RagRunResultModelType;
   signal: AbortSignal;
+  attachedFile?: {
+    filename: string;
+    mimeType?: string;
+    data: string;
+  };
 };
 
 function rethrowAbortError(e: unknown): never {
@@ -88,6 +94,22 @@ async function* runEmailWriterRoute(
   return { output };
 }
 
+/** Update a pending approval draft from chat (no send). */
+async function* runEditApprovalRoute(
+  input: RunRagPipelineInput,
+): AsyncGenerator<RunAgentStreamDelta, RunAgentExecution> {
+  const result = await corsairApprovalService.editPendingApprovalFromChat({
+    userId: input.userId,
+    threadId: input.threadId,
+    prompt: input.prompt,
+    history: input.rag.history,
+    signal: input.signal,
+  });
+
+  if (result.output) yield { type: "delta", text: result.output };
+  return { output: result.output, approvalId: result.approvalId };
+}
+
 /** Stream Corsair Gmail/Calendar actions; optionally prepends email writer draft. */
 async function* runCorsairRoute(
   input: RunRagPipelineInput,
@@ -110,17 +132,70 @@ async function* runCorsairRoute(
   });
 
   if (requiresApproval) {
+    const baseParameters = corsairApprovalService.buildParametersForRag({
+      prompt: input.prompt,
+      threadId: input.threadId,
+      messageId: input.messageId,
+      rag: ragForExecution,
+      planned,
+    });
+
+    const recipients = corsairApprovalService.getSendRecipientsForSplit(input.prompt, planned);
+    const shouldSplit = corsairApprovalService.shouldSplitSendApprovals(planned, input.prompt);
+
+    if (shouldSplit && recipients.length > 1) {
+      const approvals = await corsairApprovalService.createSplitSendApprovalsFromPlanned({
+        userId: input.userId,
+        prompt: input.prompt,
+        planned,
+        baseParameters,
+        recipients,
+        emailDraft,
+      });
+
+      if (input.attachedFile) {
+        await corsairApprovalService.syncChatFileToApprovals({
+          userId: input.userId,
+          approvals,
+          attachedFile: input.attachedFile,
+        });
+      }
+
+      const approvalMessage = formatApprovalCreatedMessage(
+        approvals.map((approval) => {
+          const params = approval.parameters as Record<string, unknown>;
+          const toRaw = params.to;
+          const to = Array.isArray(toRaw)
+            ? toRaw.find((v): v is string => typeof v === "string")
+            : typeof toRaw === "string"
+              ? toRaw
+              : undefined;
+          return { id: approval.id, to };
+        }),
+      );
+      const output = emailDraft ? `${emailDraft}\n\n---\n\n${approvalMessage}` : approvalMessage;
+      const approvalIds = approvals.map((approval) => approval.id);
+
+      for (const approvalId of approvalIds) {
+        yield { type: "approval_created", approvalId };
+      }
+      yield { type: "delta", text: output };
+      return { output, approvalId: approvalIds[0], approvalIds };
+    }
+
     const approval = await corsairApprovalService.createFromPlanned({
       userId: input.userId,
       planned,
-      parameters: corsairApprovalService.buildParametersForRag({
-        prompt: input.prompt,
-        threadId: input.threadId,
-        messageId: input.messageId,
-        rag: ragForExecution,
-        planned,
-      }),
+      parameters: baseParameters,
     });
+
+    if (input.attachedFile) {
+      await corsairApprovalService.syncChatFileToApproval({
+        userId: input.userId,
+        approvalId: approval.id,
+        attachedFile: input.attachedFile,
+      });
+    }
 
     const approvalMessage = formatApprovalCreatedMessage(approval.id);
     const output = emailDraft ? `${emailDraft}\n\n---\n\n${approvalMessage}` : approvalMessage;
@@ -154,7 +229,7 @@ async function* runCorsairRoute(
 /**
  * Pick execution strategy from RAG flags and stream the assistant response.
  *
- * Order: clarify/direct → Corsair → email writer → general assistant.
+ * Order: clarify/direct → edit pending approval → Corsair → email writer → general assistant.
  */
 export async function* runRagPipeline(
   input: RunRagPipelineInput,
@@ -163,6 +238,10 @@ export async function* runRagPipeline(
 
   if (rag.route === "clarify" || rag.route === "direct") {
     return yield* runDirectOrClarifyRoute(rag);
+  }
+
+  if (rag.runEditPendingApproval) {
+    return yield* runEditApprovalRoute(input);
   }
 
   if (rag.runCorsairAgent) {

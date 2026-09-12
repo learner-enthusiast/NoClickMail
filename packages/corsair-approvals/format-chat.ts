@@ -3,6 +3,7 @@ import {
   type CorsairEvent,
 } from "@repo/database/schema";
 import { extractGmailSendFields } from "./planner";
+import { normalizeAttachments } from "./attachments";
 
 function stripTrailingJsonBlock(text: string): string {
   const match = text.match(/^([\s\S]*?)\n\n[\[{]/);
@@ -30,7 +31,12 @@ export function formatApprovalExecutionForChat(
       case "send": {
         const sendFields = extractGmailSendFields(params);
         if (sendFields) {
-          return `Your email to ${sendFields.to} with subject "${sendFields.subject}" was sent successfully.`;
+          const attachmentCount = normalizeAttachments(params).length;
+          const attachmentNote =
+            attachmentCount > 0
+              ? ` with ${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"}`
+              : "";
+          return `Your email to ${sendFields.to} with subject "${sendFields.subject}"${attachmentNote} was sent successfully.`;
         }
         break;
       }

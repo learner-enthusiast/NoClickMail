@@ -18,6 +18,7 @@ export const ragRunMetaModel = z.object({
   route: z.enum(["clarify", "direct", "agent"]),
   runCorsairAgent: z.boolean(),
   runEmailWriterAgent: z.boolean(),
+  runEditPendingApproval: z.boolean(),
   determination: requestDeterminationModel,
   retrieve: z
     .object({
@@ -66,6 +67,7 @@ export const ragRunResultModel = z.object({
   route: z.enum(["clarify", "direct", "agent"]),
   runCorsairAgent: z.boolean(),
   runEmailWriterAgent: z.boolean(),
+  runEditPendingApproval: z.boolean(),
   assistantMessage: z.string().optional(),
   enhancedPrompt: z.string(),
   retrieved: z.array(retrievedChunkModel),

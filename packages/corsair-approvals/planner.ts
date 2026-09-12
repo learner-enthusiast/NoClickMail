@@ -7,6 +7,7 @@ import {
   googleCalendarCorsairActionValues,
 } from "@repo/database/schema";
 import type { RagRunResultModelType } from "@repo/rag-models/pipeline.model";
+import { gmailAttachmentRefModel } from "./model";
 
 const dateTimeFieldModel = z.object({
   dateTime: z.string().nullable(),
@@ -23,6 +24,7 @@ const plannedParametersModel = z.object({
   bcc: z.array(z.string()).nullable(),
   subject: z.string().nullable(),
   body: z.string().nullable(),
+  attachments: z.array(gmailAttachmentRefModel).nullable(),
   inReplyTo: z.string().nullable(),
   forwardMessageId: z.string().nullable(),
   addLabels: z.array(z.string()).nullable(),
@@ -172,6 +174,9 @@ Rules:
 - use agent_execute only when the request needs multiple chained steps or unclear decomposition
 - parameters: fill only fields needed for that action; set unused fields to null
 - for action "send": parameters.to (array of recipient emails), parameters.subject, and parameters.body are REQUIRED — infer all three from the user request and thread; never leave them null
+- when the user lists multiple recipients and wants separate threads, individual sends, or one email per person, include every recipient in parameters.to — the system will create one approval per recipient
+- when the user attached a file and wants to send it, set action send; attachments are uploaded separately — leave parameters.attachments null
+- when the user wants a single email to multiple people (cc/bcc/one email), keep all recipients in parameters.to for one approval
 - if you cannot determine to, subject, and body for an email, use action agent_execute instead of send
 - riskLevel: high for send/delete/forward; medium for create/update/draft; low for search/read/check_availability
 - title: short user-facing summary (max 80 chars)
@@ -216,6 +221,7 @@ function plannerJsonSchema() {
           bcc: stringArrayOrNull,
           subject: stringOrNull,
           body: stringOrNull,
+          attachments: { type: ["null"] },
           inReplyTo: stringOrNull,
           forwardMessageId: stringOrNull,
           addLabels: stringArrayOrNull,
@@ -258,6 +264,7 @@ function plannerJsonSchema() {
           "bcc",
           "subject",
           "body",
+          "attachments",
           "inReplyTo",
           "forwardMessageId",
           "addLabels",

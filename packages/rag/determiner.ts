@@ -26,10 +26,11 @@ Decision rules (apply in order):
 3. If the request needs Gmail or Calendar actions (search mail, send/reply, create event, check schedule, etc.) set requiresCorsairMcpTool=true.
 4. If the user wants email copy drafted, composed, rewritten, polished, or a professional reply written (even if they may send it afterward) set requiresEmailWriterAgent=true. Examples: "draft an email", "rewrite this reply", "make it more professional", "compose a follow-up". Do NOT set this for read-only inbox tasks like search, list, or summarize unless they also ask for new email text.
 5. requiresEmailWriterAgent can be true together with requiresCorsairMcpTool when the user wants Orion to write the email and then send/reply via Gmail.
-6. If the request references past preferences, standing instructions, or things the user told you before that are not in the last 10 messages set requiresLongTermMemory=true.
-7. If the user asks about uploaded files/documents, resumes, work history, employers, dates, or facts from something they attached — or the answer may be in earlier messages not fully shown — set requiresPgVectorRetrieval=true.
-8. If you are unsure whether the answer is in an uploaded document or earlier conversation context, set requiresPgVectorRetrieval=true and needsUserClarification=false. Search first; never ask the user where information is stored.
-9. If retrieved document excerpts or past context should reshape the prompt before execution set requiresExternalEnhancement=true (usually when requiresPgVectorRetrieval or requiresLongTermMemory is true).
+6. If the user wants to edit/update/change a pending approval draft from this thread (subject, body, recipient, signature, address, contact details) without sending yet, set requiresEditPendingApproval=true and requiresCorsairMcpTool=false and requiresEmailWriterAgent=false. Examples: "edit the approval to add my address", "change the subject on that pending email", "update the approval body".
+7. If the request references past preferences, standing instructions, or things the user told you before that are not in the last 10 messages set requiresLongTermMemory=true.
+8. If the user asks about uploaded files/documents, resumes, work history, employers, dates, or facts from something they attached — or the answer may be in earlier messages not fully shown — set requiresPgVectorRetrieval=true.
+9. If you are unsure whether the answer is in an uploaded document or earlier conversation context, set requiresPgVectorRetrieval=true and needsUserClarification=false. Search first; never ask the user where information is stored.
+10. If retrieved document excerpts or past context should reshape the prompt before execution set requiresExternalEnhancement=true (usually when requiresPgVectorRetrieval or requiresLongTermMemory is true).
 
 Corsair MCP capabilities:
 ${formatCorsairToolsForPrompt()}
@@ -45,6 +46,7 @@ function determinationJsonSchema() {
       requiresPgVectorRetrieval: { type: "boolean" },
       requiresExternalEnhancement: { type: "boolean" },
       requiresEmailWriterAgent: { type: "boolean" },
+      requiresEditPendingApproval: { type: "boolean" },
       needsUserClarification: { type: "boolean" },
       clarifyingQuestion: { type: ["string", "null"] },
       directResponse: { type: ["string", "null"] },
@@ -56,6 +58,7 @@ function determinationJsonSchema() {
       "requiresPgVectorRetrieval",
       "requiresExternalEnhancement",
       "requiresEmailWriterAgent",
+      "requiresEditPendingApproval",
       "needsUserClarification",
       "clarifyingQuestion",
       "directResponse",
