@@ -1,4 +1,4 @@
-import db, { and, asc, desc, eq } from "@repo/database";
+import db, { and, asc, desc, eq, sql } from "@repo/database";
 import { chatMessages, chatThreads } from "@repo/database/schema";
 import { notFound } from "@repo/error";
 
@@ -50,7 +50,7 @@ class ChatService {
     role: "user" | "assistant" | "system";
     content: string;
     approvalId?: string;
-    imageUrl?: string;
+    imageUrl?: string[];
   }) {
     await this.getThreadForUser(input.userId, input.threadId);
     const content = input.content.slice(0, MAX_MESSAGE_CHARS);
@@ -85,14 +85,17 @@ class ChatService {
     return msg;
   }
 
-  async updateMessageImageUrl(input: {
+  /** Append one uploaded attachment URL without clobbering others on the same message. */
+  async appendMessageImageUrl(input: {
     userId: string;
     messageId: string;
     imageUrl: string;
   }) {
     const [msg] = await db
       .update(chatMessages)
-      .set({ imageUrl: input.imageUrl })
+      .set({
+        imageUrl: sql`array_append(coalesce(${chatMessages.imageUrl}, array[]::text[]), ${input.imageUrl}::text)`,
+      })
       .where(
         and(eq(chatMessages.id, input.messageId), eq(chatMessages.userId, input.userId)),
       )

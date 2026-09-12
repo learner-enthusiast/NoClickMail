@@ -7,7 +7,7 @@ export const chunkTextAndUploadInputModel = z.object({
   threadId: z.uuid(),
   messageId: z.uuid(),
   role: z.enum(["user", "assistant", "system"]).default("user"),
-  /** Inline extracted text — used in dev; omitted in prod (resolved from message imageUrl). */
+  /** Inline extracted text — used in dev; omitted in prod (resolved from object storage). */
   text: z.string().min(1).optional(),
   sourceFilename: z.string().min(1).optional(),
   /** Position of this file within the message's attachments — namespaces its vector ids. */

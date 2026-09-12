@@ -32,12 +32,10 @@ export const chatMessages = pgTable(
     }),
     // rough token estimate, stored so we can budget context without re-counting
     tokenEstimate: integer("token_estimate").notNull().default(0),
-    imageUrl: text("image_url"),
+    imageUrl: text("image_url").array(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [
-    index("chat_messages_thread_created_idx").on(t.threadId, t.createdAt),
-  ],
+  (t) => [index("chat_messages_thread_created_idx").on(t.threadId, t.createdAt)],
 );
 
 export type SelectChatThread = typeof chatThreads.$inferSelect;

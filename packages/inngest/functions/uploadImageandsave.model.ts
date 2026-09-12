@@ -11,8 +11,6 @@ export const uploadImageAndSaveInputModel = z.object({
   data: z.string().min(1),
   /** Position of this file within the message's attachments — keeps object keys unique. */
   attachmentIndex: z.number().int().nonnegative().default(0),
-  /** Only one attachment per message may claim the message's single imageUrl column. */
-  setMessageImageUrl: z.boolean().default(true),
 });
 
 export type UploadImageAndSaveInputModelType = z.infer<typeof uploadImageAndSaveInputModel>;

@@ -64,6 +64,13 @@
       "when": 1788536000000,
       "tag": "0008_chat_message_image_url",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789217289811,
+      "tag": "0009_wandering_wrecker",
+      "breakpoints": true
     }
   ]
 }

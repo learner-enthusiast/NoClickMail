@@ -8,7 +8,7 @@ export const chatMessageModel = z.object({
   role: chatRoleModel,
   content: z.string(),
   approvalId: z.string().uuid().nullable(),
-  imageUrl: z.string().url().nullable(),
+  imageUrl: z.array(z.string().url()).nullable(),
   createdAt: z.string(),
 });
 export type ChatMessageType = z.infer<typeof chatMessageModel>;

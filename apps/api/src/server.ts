@@ -59,7 +59,9 @@ app.use(
         : false,
   }),
 );
-app.use(express.json({ limit: "15mb" }));
+// Headroom for a multi-file chat message: base64 inflates the 20MB attachment
+// budget to ~27MB before JSON overhead.
+app.use(express.json({ limit: "30mb" }));
 app.use(cookieParser());
 app.use((req, res, next) => {
   const start = Date.now();

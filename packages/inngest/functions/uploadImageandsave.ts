@@ -100,23 +100,21 @@ export const uploadImageAndSave = inngest.createFunction(
         : fileSaveService.uploadToS3(uploadInput);
     });
 
-    if (input.setMessageImageUrl) {
-      await step.sleep("wait-before-image-url-update", "30s");
+    await step.sleep("wait-before-image-url-update", "30s");
 
-      await step.run("update-message-image-url", async () => {
-        logger.info("Updating chat message with attachment URL", {
-          userId: input.userId,
-          messageId: input.messageId,
-          imageUrl: upload.url,
-        });
-
-        await chatService.updateMessageImageUrl({
-          userId: input.userId,
-          messageId: input.messageId,
-          imageUrl: upload.url,
-        });
+    await step.run("append-message-image-url", async () => {
+      logger.info("Appending chat message attachment URL", {
+        userId: input.userId,
+        messageId: input.messageId,
+        imageUrl: upload.url,
       });
-    }
+
+      await chatService.appendMessageImageUrl({
+        userId: input.userId,
+        messageId: input.messageId,
+        imageUrl: upload.url,
+      });
+    });
 
     return uploadImageAndSaveOutputModel.parse({
       imageUrl: upload.url,

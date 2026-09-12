@@ -102,8 +102,6 @@ export const agentsRouter = router({
             mimeType: file.mimeType,
             data: file.data,
             attachmentIndex,
-            // Only the first attachment claims the message's single imageUrl column.
-            setMessageImageUrl: attachmentIndex === 0,
           },
         })),
       );

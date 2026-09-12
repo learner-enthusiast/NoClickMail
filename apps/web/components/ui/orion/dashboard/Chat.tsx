@@ -330,14 +330,19 @@ export function Chat() {
 
   async function onFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(e.target.files ?? []);
-    e.target.value = "";
     if (picked.length === 0) return;
 
-    try {
-      const encoded = await readFilesAsBase64(picked, attachedFiles);
-      setAttachedFiles((prev) => [...prev, ...encoded]);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to attach files.");
+    const { attached, errors } = await readFilesAsBase64(picked, attachedFiles);
+
+    // Clear only after reading, so the File handles stay valid and the same
+    // selection can be picked again later.
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    if (attached.length > 0) {
+      setAttachedFiles((prev) => [...prev, ...attached]);
+    }
+    for (const message of errors) {
+      toast.error(message);
     }
   }
 

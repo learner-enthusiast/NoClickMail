@@ -2,8 +2,8 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 export const MAX_FILES_PER_MESSAGE = 10;
 
-/** Base64 inflates bytes by ~33%, and the API accepts a 15MB JSON body. */
-export const MAX_TOTAL_FILE_BYTES = 10 * 1024 * 1024;
+/** Combined budget for one message; base64 inflates it ~33% against the API body limit. */
+export const MAX_TOTAL_FILE_BYTES = 20 * 1024 * 1024;
 
 const ACCEPTED_EXTENSIONS = new Set([
   "pdf",
@@ -77,29 +77,60 @@ export function readFileAsBase64(file: File): Promise<AttachedAgentFile> {
 export const AGENT_FILE_ACCEPT =
   ".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx,.xls,.csv,application/pdf,image/png,image/jpeg";
 
+export type ReadFilesResult = {
+  attached: AttachedAgentFile[];
+  errors: string[];
+};
+
+function megabytes(bytes: number): number {
+  return bytes / (1024 * 1024);
+}
+
 /**
- * Read a batch of picked files, rejecting the whole batch if it would exceed the
- * per-message count or the combined byte budget of files already attached.
+ * Read a batch of picked files, keeping every file that succeeds and reporting the
+ * rest by name. A single unsupported or oversized file never discards the selection.
  */
 export async function readFilesAsBase64(
   files: File[],
   alreadyAttached: AttachedAgentFile[] = [],
-): Promise<AttachedAgentFile[]> {
-  if (files.length === 0) return [];
+): Promise<ReadFilesResult> {
+  const attached: AttachedAgentFile[] = [];
+  const errors: string[] = [];
 
-  if (alreadyAttached.length + files.length > MAX_FILES_PER_MESSAGE) {
-    throw new Error(`You can attach up to ${MAX_FILES_PER_MESSAGE} files per message.`);
+  if (files.length === 0) return { attached, errors };
+
+  const remainingSlots = MAX_FILES_PER_MESSAGE - alreadyAttached.length;
+  if (remainingSlots <= 0) {
+    errors.push(`You can attach up to ${MAX_FILES_PER_MESSAGE} files per message.`);
+    return { attached, errors };
   }
 
-  const attachedBytes = alreadyAttached.reduce((sum, f) => sum + f.size, 0);
-  const incomingBytes = files.reduce((sum, f) => sum + f.size, 0);
-  if (attachedBytes + incomingBytes > MAX_TOTAL_FILE_BYTES) {
-    throw new Error(
-      `Attachments are too large together (max ${MAX_TOTAL_FILE_BYTES / (1024 * 1024)}MB total).`,
+  const accepted = files.slice(0, remainingSlots);
+  if (files.length > remainingSlots) {
+    errors.push(
+      `Only ${remainingSlots} more file(s) fit — skipped ${files.length - remainingSlots}.`,
     );
   }
 
-  return Promise.all(files.map((file) => readFileAsBase64(file)));
+  let usedBytes = alreadyAttached.reduce((sum, file) => sum + file.size, 0);
+
+  for (const file of accepted) {
+    if (usedBytes + file.size > MAX_TOTAL_FILE_BYTES) {
+      errors.push(
+        `${file.name} skipped — attachments cannot exceed ${megabytes(MAX_TOTAL_FILE_BYTES)}MB in total.`,
+      );
+      continue;
+    }
+
+    try {
+      attached.push(await readFileAsBase64(file));
+      usedBytes += file.size;
+    } catch (err) {
+      errors.push(`${file.name}: ${err instanceof Error ? err.message : "could not be read."}`);
+    }
+  }
+
+  return { attached, errors };
 }
 
 export function formatAttachedFilenames(filenames: string[]): string {

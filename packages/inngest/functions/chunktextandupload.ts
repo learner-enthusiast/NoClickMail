@@ -33,8 +33,8 @@ export const chunkTextAndUpload = inngest.createFunction(
     if (isProduction()) {
       await step.sleep("wait-for-attachment-upload", "50s"); //Hope will happen in 50s or will have to implement polling
 
-      // Read this attachment back by its deterministic object key rather than the
-      // message's single imageUrl, so every file of a multi-file message resolves.
+      // Read this attachment back by its deterministic object key so every file of a
+      // multi-file message resolves independently of the message's imageUrl array.
       text = await step.run("fetch-and-extract-from-storage", async () => {
         const filename = input.sourceFilename ?? "attachment";
         const key = buildObjectKey(

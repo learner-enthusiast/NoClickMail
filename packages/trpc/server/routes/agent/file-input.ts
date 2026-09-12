@@ -7,7 +7,7 @@ import type {
 import type { RunAgentFileInputModelType } from "./model";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const MAX_TOTAL_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_TOTAL_FILE_BYTES = 20 * 1024 * 1024;
 
 export type ExtractedAttachment = {
   filename: string;
