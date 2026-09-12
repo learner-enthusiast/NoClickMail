@@ -9,7 +9,11 @@ import {
   isInngestEnabled,
 } from "@repo/inngest";
 import { zodUndefinedModel } from "../../schema";
-import { chatThreadModel, chatMessageModel } from "@repo/services/model";
+import {
+  chatThreadModel,
+  threadMessagesInputModel,
+  threadMessagesPageModel,
+} from "@repo/services/model";
 import { streamAgentResponseForRagResult } from "./run-agent-stream";
 import {
   buildAgentPromptFromFiles,
@@ -211,18 +215,25 @@ export const agentsRouter = router({
       }));
     }),
   threadMessages: authenticatedProcedure
-    .input(z.object({ threadId: z.uuid() }))
-    .output(z.array(chatMessageModel))
+    .input(threadMessagesInputModel)
+    .output(threadMessagesPageModel)
     .query(async ({ ctx, input }) => {
-      const messages = await chatService.getMessages(ctx.user, input.threadId);
-      return messages.map((m) => ({
-        id: m.id,
-        threadId: m.threadId,
-        role: m.role,
-        content: m.content,
-        approvalId: m.approvalId,
-        imageUrl: m.imageUrl,
-        createdAt: m.createdAt.toISOString(),
-      }));
+      const page = await chatService.getMessagesPage(ctx.user, input.threadId, {
+        limit: input.limit,
+        cursor: input.cursor,
+      });
+
+      return {
+        nextCursor: page.nextCursor,
+        messages: page.messages.map((m) => ({
+          id: m.id,
+          threadId: m.threadId,
+          role: m.role,
+          content: m.content,
+          approvalId: m.approvalId,
+          imageUrl: m.imageUrl,
+          createdAt: m.createdAt.toISOString(),
+        })),
+      };
     }),
 });

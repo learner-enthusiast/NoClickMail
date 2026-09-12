@@ -13,8 +13,14 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { runAgent, agentThreadMessages, agentThreads } from "~/hooks/agent.ts";
+import {
+  CHAT_MESSAGES_PAGE_SIZE,
+  runAgent,
+  agentThreadMessages,
+  agentThreads,
+} from "~/hooks/agent.ts";
 import { trpc } from "~/trpc/client";
+import type { RouterOutputs } from "@repo/trpc/client";
 import { cn } from "~/lib/utils";
 
 import { gmailSentContacts } from "~/hooks/gmail";
@@ -33,6 +39,51 @@ import CalendarInviteDialog from "../../calendarinvite";
 import { ThinkingBubble } from "./ThinkingBubble";
 import { ChatErrorBubble, ChatMessageBubble } from "./ChatMessageBubble";
 import type { AgentStreamEventModelType } from "@repo/trpc/client";
+
+type ThreadMessage = RouterOutputs["agent"]["threadMessages"]["messages"][number];
+
+function threadMessagesQueryInput(threadId: string) {
+  return { threadId, limit: CHAT_MESSAGES_PAGE_SIZE };
+}
+
+function appendToLatestThreadPage(
+  utils: ReturnType<typeof trpc.useUtils>,
+  threadId: string,
+  message: ThreadMessage,
+) {
+  utils.agent.threadMessages.setInfiniteData(threadMessagesQueryInput(threadId), (current) => {
+    if (!current?.pages.length) {
+      return {
+        pages: [{ messages: [message], nextCursor: null }],
+        pageParams: [null],
+      };
+    }
+
+    return {
+      ...current,
+      pages: current.pages.map((page, index) =>
+        index === 0 ? { ...page, messages: [...page.messages, message] } : page,
+      ),
+    };
+  });
+}
+
+function removeOptimisticFromThread(
+  utils: ReturnType<typeof trpc.useUtils>,
+  threadId: string,
+  optimisticId: string,
+) {
+  utils.agent.threadMessages.setInfiniteData(threadMessagesQueryInput(threadId), (current) => {
+    if (!current) return current;
+    return {
+      ...current,
+      pages: current.pages.map((page) => ({
+        ...page,
+        messages: page.messages.filter((message) => message.id !== optimisticId),
+      })),
+    };
+  });
+}
 
 const QUICK_ACTIONS = [
   { label: "Summarize", icon: FileText, prompt: "Summarize the key risks in the selected report." },
@@ -59,7 +110,7 @@ function pendingUserVisible(
   return !messages?.some((m) => m.role === "user" && m.content === pendingUser);
 }
 
-/** Transcript — server messages plus optimistic in-flight user turn. */
+/** Transcript — paginated server messages plus optimistic in-flight user turn. */
 function Transcript({
   threadId,
   pendingUser,
@@ -77,20 +128,78 @@ function Transcript({
   errorMessage: string | null;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const { data: messages, isPending } = agentThreadMessages(
-    { threadId: threadId! },
-    threadId !== null,
-  );
+  const {
+    data,
+    isPending,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = agentThreadMessages(threadId);
+
+  const messages = useMemo(() => {
+    if (!data?.pages.length) return [];
+    // Page 0 is the newest batch; later pages are progressively older.
+    return [...data.pages].reverse().flatMap((page) => page.messages);
+  }, [data]);
   const showPendingUser = pendingUserVisible(pendingUser, messages);
 
+  const stickToBottomRef = useRef(true);
+  const loadingOlderRef = useRef(false);
+
   useEffect(() => {
+    stickToBottomRef.current = true;
+  }, [threadId]);
+
+  useEffect(() => {
+    if (loadingOlderRef.current || !stickToBottomRef.current) return;
     requestAnimationFrame(() =>
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }),
     );
-  }, [messages, pendingUser, isBusy, streamingAssistant, streamingApprovalIds, errorMessage, scrollRef]);
+  }, [
+    messages.length,
+    pendingUser,
+    isBusy,
+    streamingAssistant,
+    streamingApprovalIds,
+    errorMessage,
+    scrollRef,
+  ]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !threadId) return;
+
+    const onScroll = () => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stickToBottomRef.current = distanceFromBottom < 120;
+
+      if (el.scrollTop > 80 || !hasNextPage || isFetchingNextPage || loadingOlderRef.current) {
+        return;
+      }
+
+      loadingOlderRef.current = true;
+      const previousHeight = el.scrollHeight;
+
+      void fetchNextPage()
+        .then(() => {
+          requestAnimationFrame(() => {
+            const container = scrollRef.current;
+            if (container) {
+              container.scrollTop = container.scrollHeight - previousHeight;
+            }
+          });
+        })
+        .finally(() => {
+          loadingOlderRef.current = false;
+        });
+    };
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [threadId, hasNextPage, isFetchingNextPage, fetchNextPage, scrollRef]);
 
   const showInitialLoading =
-    threadId !== null && isPending && !messages?.length && !showPendingUser && !isBusy;
+    threadId !== null && isPending && !messages.length && !showPendingUser && !isBusy;
 
   return (
     <>
@@ -100,7 +209,10 @@ function Transcript({
         </div>
       )}
       {showInitialLoading && <p className="text-sm text-muted-foreground">Loading conversation…</p>}
-      {(messages ?? [])
+      {isFetchingNextPage && (
+        <p className="py-2 text-center text-xs text-muted-foreground">Loading earlier messages…</p>
+      )}
+      {messages
         .filter((m): m is typeof m & { role: "user" | "assistant" } =>
           m.role === "user" || m.role === "assistant",
         )
@@ -187,8 +299,7 @@ export function Chat() {
     const id = preferredThreadId ?? latest[0]?.id;
     if (id) {
       setThreadId(id);
-      await utils.agent.threadMessages.invalidate({ threadId: id });
-      await utils.agent.threadMessages.refetch({ threadId: id });
+      await utils.agent.threadMessages.invalidate(threadMessagesQueryInput(id));
     }
     return id;
   }
@@ -227,14 +338,11 @@ export function Chat() {
     }
 
     if (activeThreadId && resolvedThreadId && activeThreadId !== resolvedThreadId) {
-      utils.agent.threadMessages.setData({ threadId: activeThreadId }, (prev) =>
-        (prev ?? []).filter((m) => m.id !== optimisticId),
-      );
+      removeOptimisticFromThread(utils, activeThreadId, optimisticId);
     }
 
     if (resolvedThreadId) {
-      await utils.agent.threadMessages.invalidate({ threadId: resolvedThreadId });
-      await utils.agent.threadMessages.refetch({ threadId: resolvedThreadId });
+      await utils.agent.threadMessages.invalidate(threadMessagesQueryInput(resolvedThreadId));
       await utils.agent.listThreads.invalidate();
       setPendingUser(null);
       setStreamingAssistant(null);
@@ -261,18 +369,15 @@ export function Chat() {
     const optimisticId = `optimistic-${Date.now()}`;
 
     if (activeThreadId) {
-      utils.agent.threadMessages.setData({ threadId: activeThreadId }, (prev) => [
-        ...(prev ?? []),
-        {
-          id: optimisticId,
-          threadId: activeThreadId,
-          role: "user" as const,
-          content: displayUser,
-          approvalId: null,
-          imageUrl: null,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+      appendToLatestThreadPage(utils, activeThreadId, {
+        id: optimisticId,
+        threadId: activeThreadId,
+        role: "user",
+        content: displayUser,
+        approvalId: null,
+        imageUrl: null,
+        createdAt: new Date().toISOString(),
+      });
     }
 
     try {
@@ -285,9 +390,7 @@ export function Chat() {
     } catch (e) {
       if (isAbortError(e)) {
         if (activeThreadId) {
-          utils.agent.threadMessages.setData({ threadId: activeThreadId }, (prev) =>
-            (prev ?? []).filter((m) => m.id !== optimisticId),
-          );
+          removeOptimisticFromThread(utils, activeThreadId, optimisticId);
         }
         toast.message("Stopped");
         setStreamingAssistant(null);
@@ -306,9 +409,7 @@ export function Chat() {
 
       const syncedId = await syncThreadMessages(activeThreadId);
       if (activeThreadId) {
-        utils.agent.threadMessages.setData({ threadId: activeThreadId }, (prev) =>
-          (prev ?? []).filter((m) => m.id !== optimisticId),
-        );
+        removeOptimisticFromThread(utils, activeThreadId, optimisticId);
       }
       if (syncedId) {
         setPendingUser(null);

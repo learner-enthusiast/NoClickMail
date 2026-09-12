@@ -1,4 +1,4 @@
-import db, { and, asc, desc, eq, sql } from "@repo/database";
+import db, { and, asc, desc, eq, lt, or, sql } from "@repo/database";
 import { chatMessages, chatThreads } from "@repo/database/schema";
 import { notFound } from "@repo/error";
 
@@ -42,6 +42,57 @@ class ChatService {
       .from(chatMessages)
       .where(and(eq(chatMessages.threadId, threadId), eq(chatMessages.userId, userId)))
       .orderBy(asc(chatMessages.createdAt));
+  }
+
+  /**
+   * Paginate thread messages newest-first internally, returning each page in chronological order.
+   * Without a cursor, returns the latest `limit` messages. With a cursor, returns the next
+   * `limit` messages that are older than that message.
+   */
+  async getMessagesPage(
+    userId: string,
+    threadId: string,
+    input: { limit: number; cursor?: string },
+  ) {
+    await this.getThreadForUser(userId, threadId);
+
+    const filters = [
+      eq(chatMessages.threadId, threadId),
+      eq(chatMessages.userId, userId),
+    ];
+
+    if (input.cursor) {
+      const cursorMessage = await this.getMessageForUser(userId, input.cursor);
+      if (cursorMessage.threadId !== threadId) {
+        throw notFound("Message not found in this thread");
+      }
+
+      filters.push(
+        or(
+          lt(chatMessages.createdAt, cursorMessage.createdAt),
+          and(
+            eq(chatMessages.createdAt, cursorMessage.createdAt),
+            lt(chatMessages.id, cursorMessage.id),
+          ),
+        )!,
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(chatMessages)
+      .where(and(...filters))
+      .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+      .limit(input.limit + 1);
+
+    const hasMore = rows.length > input.limit;
+    const pageRows = hasMore ? rows.slice(0, input.limit) : rows;
+    const messages = [...pageRows].reverse();
+
+    return {
+      messages,
+      nextCursor: hasMore && messages.length > 0 ? messages[0]!.id : null,
+    };
   }
 
   async appendMessage(input: {
