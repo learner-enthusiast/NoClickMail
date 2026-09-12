@@ -5,6 +5,7 @@ import {
   type CorsairAgentExecutionParameters,
   type CorsairEvent,
   type CorsairEventStatus,
+  type GmailAttachmentRef,
 } from "@repo/database/schema";
 import type { RagRunResultModelType } from "@repo/rag-models/pipeline.model";
 import { badRequest, notFound, normalizeServiceError } from "@repo/error";
@@ -484,25 +485,40 @@ class CorsairApprovalService {
     return approvals;
   }
 
-  async syncChatFileToApprovals(input: {
+  /** Copy every chat attachment onto each approval, replacing any existing attachment set. */
+  async syncChatFilesToApprovals(input: {
     userId: string;
     approvals: CorsairEvent[];
-    attachedFile: { filename: string; mimeType?: string; data: string };
+    attachedFiles: Array<{ filename: string; mimeType?: string; data: string }>;
   }) {
-    const body = Buffer.from(input.attachedFile.data, "base64");
+    if (input.attachedFiles.length === 0) return;
+
+    const decoded = input.attachedFiles.map((file) => ({
+      filename: file.filename,
+      mimeType: file.mimeType,
+      body: Buffer.from(file.data, "base64"),
+    }));
 
     for (const approval of input.approvals) {
-      const ref = await uploadChatFileToApproval({
-        userId: input.userId,
-        approvalId: approval.id,
-        filename: input.attachedFile.filename,
-        mimeType: input.attachedFile.mimeType,
-        body,
-      });
+      const refs: GmailAttachmentRef[] = [];
+
+      for (const file of decoded) {
+        refs.push(
+          await uploadChatFileToApproval({
+            userId: input.userId,
+            approvalId: approval.id,
+            filename: file.filename,
+            mimeType: file.mimeType,
+            body: file.body,
+          }),
+        );
+      }
+
+      assertAttachmentSizeLimits(refs);
 
       const parameters = {
         ...(approval.parameters as Record<string, unknown>),
-        attachments: [ref],
+        attachments: refs,
       };
 
       await db
@@ -512,16 +528,16 @@ class CorsairApprovalService {
     }
   }
 
-  async syncChatFileToApproval(input: {
+  async syncChatFilesToApproval(input: {
     userId: string;
     approvalId: string;
-    attachedFile: { filename: string; mimeType?: string; data: string };
+    attachedFiles: Array<{ filename: string; mimeType?: string; data: string }>;
   }) {
     const approval = await this.getForUser(input.userId, input.approvalId);
-    await this.syncChatFileToApprovals({
+    await this.syncChatFilesToApprovals({
       userId: input.userId,
       approvals: [approval],
-      attachedFile: input.attachedFile,
+      attachedFiles: input.attachedFiles,
     });
     return this.getForUser(input.userId, input.approvalId);
   }

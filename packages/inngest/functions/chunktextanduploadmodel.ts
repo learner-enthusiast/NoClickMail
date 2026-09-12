@@ -10,6 +10,8 @@ export const chunkTextAndUploadInputModel = z.object({
   /** Inline extracted text — used in dev; omitted in prod (resolved from message imageUrl). */
   text: z.string().min(1).optional(),
   sourceFilename: z.string().min(1).optional(),
+  /** Position of this file within the message's attachments — namespaces its vector ids. */
+  attachmentIndex: z.number().int().nonnegative().default(0),
 });
 
 export type ChunkTextAndUploadInputModelType = z.infer<typeof chunkTextAndUploadInputModel>;

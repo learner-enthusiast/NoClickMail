@@ -1,6 +1,5 @@
-import path from "node:path";
 import RagService from "@repo/rag";
-import ChatService from "@repo/chat";
+import FileSaveService from "@repo/filesavemodule";
 import FileExtractorService from "@repo/file-extractor";
 import { env } from "@repo/env";
 import { logger } from "@repo/logger";
@@ -10,31 +9,14 @@ import {
   chunkTextAndUploadInputModel,
   chunkTextAndUploadOutputModel,
 } from "./chunktextanduploadmodel";
+import { buildObjectKey } from "./uploadImageandsave";
 
 const ragService = new RagService();
-const chatService = new ChatService();
+const fileSaveService = new FileSaveService();
 const fileExtractorService = new FileExtractorService();
 
 function isProduction(): boolean {
   return env.NODE_ENV === "production" || env.NODE_ENV === "prod";
-}
-
-function filenameFromUrl(url: string, fallback?: string): string {
-  try {
-    const base = path.basename(new URL(url).pathname);
-    if (base && base !== "/") return base;
-  } catch {
-    // ignore invalid URL
-  }
-  return fallback ?? "attachment";
-}
-
-async function fetchFileBuffer(imageUrl: string): Promise<Buffer> {
-  const response = await fetch(imageUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch attachment (${response.status}): ${imageUrl}`);
-  }
-  return Buffer.from(await response.arrayBuffer());
 }
 
 export const chunkTextAndUpload = inngest.createFunction(
@@ -51,16 +33,18 @@ export const chunkTextAndUpload = inngest.createFunction(
     if (isProduction()) {
       await step.sleep("wait-for-attachment-upload", "50s"); //Hope will happen in 50s or will have to implement polling
 
-      text = await step.run("fetch-and-extract-from-image-url", async () => {
-        const message = await chatService.getMessageForUser(input.userId, input.messageId);
-        if (!message.imageUrl) {
-          throw new Error(
-            `Message ${input.messageId} has no imageUrl yet — upload may still be in progress or failed.`,
-          );
-        }
+      // Read this attachment back by its deterministic object key rather than the
+      // message's single imageUrl, so every file of a multi-file message resolves.
+      text = await step.run("fetch-and-extract-from-storage", async () => {
+        const filename = input.sourceFilename ?? "attachment";
+        const key = buildObjectKey(
+          input.userId,
+          input.messageId,
+          filename,
+          input.attachmentIndex,
+        );
 
-        const filename = filenameFromUrl(message.imageUrl, input.sourceFilename);
-        const buffer = await fetchFileBuffer(message.imageUrl);
+        const buffer = await fileSaveService.getObject(key);
         const extraction = await fileExtractorService.extractText({
           file: buffer,
           filename,
@@ -69,10 +53,10 @@ export const chunkTextAndUpload = inngest.createFunction(
           pdfTextFallbackThreshold: 32,
         });
 
-        logger.info("Extracted attachment text from imageUrl for pgvector indexing", {
+        logger.info("Extracted attachment text from object storage for pgvector indexing", {
           userId: input.userId,
           messageId: input.messageId,
-          imageUrl: message.imageUrl,
+          key,
           filename,
           format: extraction.format,
           textLength: extraction.text.length,
@@ -95,6 +79,7 @@ export const chunkTextAndUpload = inngest.createFunction(
         threadId: input.threadId,
         messageId: input.messageId,
         sourceFilename: input.sourceFilename,
+        attachmentIndex: input.attachmentIndex,
         textLength: text.length,
         production: isProduction(),
       });
@@ -105,6 +90,7 @@ export const chunkTextAndUpload = inngest.createFunction(
         messageId: input.messageId,
         role: input.role,
         text,
+        sourceIndex: input.attachmentIndex,
       });
     });
 

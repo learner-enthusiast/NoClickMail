@@ -20,11 +20,11 @@ type RunRagPipelineInput = {
   messageId: string;
   rag: RagRunResultModelType;
   signal: AbortSignal;
-  attachedFile?: {
+  attachedFiles?: Array<{
     filename: string;
     mimeType?: string;
     data: string;
-  };
+  }>;
 };
 
 function rethrowAbortError(e: unknown): never {
@@ -153,11 +153,11 @@ async function* runCorsairRoute(
         emailDraft,
       });
 
-      if (input.attachedFile) {
-        await corsairApprovalService.syncChatFileToApprovals({
+      if (input.attachedFiles?.length) {
+        await corsairApprovalService.syncChatFilesToApprovals({
           userId: input.userId,
           approvals,
-          attachedFile: input.attachedFile,
+          attachedFiles: input.attachedFiles,
         });
       }
 
@@ -189,11 +189,11 @@ async function* runCorsairRoute(
       parameters: baseParameters,
     });
 
-    if (input.attachedFile) {
-      await corsairApprovalService.syncChatFileToApproval({
+    if (input.attachedFiles?.length) {
+      await corsairApprovalService.syncChatFilesToApproval({
         userId: input.userId,
         approvalId: approval.id,
-        attachedFile: input.attachedFile,
+        attachedFiles: input.attachedFiles,
       });
     }
 

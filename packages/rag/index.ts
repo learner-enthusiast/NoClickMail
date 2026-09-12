@@ -138,11 +138,20 @@ class RagService {
     messageId: string;
     role: "user" | "assistant" | "system";
     text: string;
+    /** Distinguishes multiple attachments indexed under the same message. */
+    sourceIndex?: number;
   }): Promise<{ chunkCount: number; embeddedCount: number }> {
     return this.indexMessagesForRetrieval({
       userId: input.userId,
       threadId: input.threadId,
-      messages: [{ messageId: input.messageId, role: input.role, content: input.text }],
+      messages: [
+        {
+          messageId: input.messageId,
+          role: input.role,
+          content: input.text,
+          sourceIndex: input.sourceIndex,
+        },
+      ],
     });
   }
 
@@ -159,6 +168,7 @@ class RagService {
       messageId: string;
       role: "user" | "assistant" | "system";
       content: string;
+      sourceIndex?: number;
     }[];
   }): Promise<{ chunkCount: number; embeddedCount: number }> {
     const chunkOpts = { maxChars: env.RAG_CHUNK_SIZE, overlap: env.RAG_CHUNK_OVERLAP };
@@ -172,7 +182,10 @@ class RagService {
       chunks.forEach((text, chunkIndex) => {
         textsToEmbed.push(text);
         records.push({
-          id: `${message.messageId}:${chunkIndex}`,
+          id:
+            message.sourceIndex === undefined
+              ? `${message.messageId}:${chunkIndex}`
+              : `${message.messageId}:${message.sourceIndex}:${chunkIndex}`,
           values: [],
           metadata: {
             userId: input.userId,

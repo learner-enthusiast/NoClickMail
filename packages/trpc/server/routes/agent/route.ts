@@ -12,11 +12,12 @@ import { zodUndefinedModel } from "../../schema";
 import { chatThreadModel, chatMessageModel } from "@repo/services/model";
 import { streamAgentResponseForRagResult } from "./run-agent-stream";
 import {
-  buildAgentPromptFromFile,
-  decodeRunAgentFile,
-  userMessageContentWithAttachment,
+  buildAgentPromptFromFiles,
+  decodeRunAgentFiles,
+  userMessageContentWithAttachments,
+  type AttachmentMeta,
+  type ExtractedAttachment,
 } from "./file-input";
-import type { ExtractionMethodModelType, SupportedFileFormatModelType } from "@repo/services/model";
 import { runAgentInputModel } from "./model";
 
 function isProductionEnv(): boolean {
@@ -36,40 +37,43 @@ export const agentsRouter = router({
     const parsed = runAgentInputModel.parse(input);
     const trimmedPrompt = parsed.prompt.trim();
 
-    let agentPrompt = trimmedPrompt || "Please analyze the attached document.";
+    const attachedFiles = parsed.files ?? [];
+
+    let agentPrompt = trimmedPrompt;
     let userContent = trimmedPrompt;
-    let fileMeta:
-      | {
-          filename: string;
-          format: SupportedFileFormatModelType;
-          method: ExtractionMethodModelType;
-          lowConfidence: boolean;
-        }
-      | undefined;
-    let extractedFileText: string | undefined;
-    let attachedFilename: string | undefined;
+    let filesMeta: AttachmentMeta[] | undefined;
+    const attachments: ExtractedAttachment[] = [];
 
-    if (parsed.file) {
-      const buffer = decodeRunAgentFile(parsed.file);
-      const extraction = await fileExtractorService.extractText({
-        file: buffer,
-        filename: parsed.file.filename,
-        mimeType: parsed.file.mimeType,
-        ocrLanguage: "eng",
-        minOcrConfidence: 60,
-        pdfTextFallbackThreshold: 32,
-      });
+    if (attachedFiles.length > 0) {
+      const buffers = decodeRunAgentFiles(attachedFiles);
 
-      agentPrompt = buildAgentPromptFromFile(trimmedPrompt, parsed.file.filename, extraction);
-      userContent = userMessageContentWithAttachment(trimmedPrompt, parsed.file.filename);
-      extractedFileText = extraction.text;
-      attachedFilename = parsed.file.filename;
-      fileMeta = {
-        filename: parsed.file.filename,
-        format: extraction.format,
-        method: extraction.method,
-        lowConfidence: extraction.lowConfidence,
-      };
+      // Extract per file — the extractor detects each file's format independently,
+      // so a single message can mix pdf, images, Word docs and spreadsheets.
+      for (const [index, file] of attachedFiles.entries()) {
+        const extraction = await fileExtractorService.extractText({
+          file: buffers[index]!,
+          filename: file.filename,
+          mimeType: file.mimeType,
+          ocrLanguage: "eng",
+          minOcrConfidence: 60,
+          pdfTextFallbackThreshold: 32,
+        });
+
+        attachments.push({ filename: file.filename, mimeType: file.mimeType, extraction });
+        assertNotAborted(ctx.signal);
+      }
+
+      agentPrompt = buildAgentPromptFromFiles(trimmedPrompt, attachments);
+      userContent = userMessageContentWithAttachments(
+        trimmedPrompt,
+        attachments.map((attachment) => attachment.filename),
+      );
+      filesMeta = attachments.map((attachment) => ({
+        filename: attachment.filename,
+        format: attachment.extraction.format,
+        method: attachment.extraction.method,
+        lowConfidence: attachment.extraction.lowConfidence,
+      }));
     }
 
     // Step 1 — resolve thread (create on first message).
@@ -85,33 +89,48 @@ export const agentsRouter = router({
       content: userContent,
     });
 
-    if (parsed.file && isInngestEnabled()) {
-      inngest.send({
-        name: UPLOAD_IMAGE_AND_SAVE_EVENT,
-        data: {
-          userId: ctx.user,
-          messageId: userMsg.id,
-          filename: parsed.file.filename,
-          mimeType: parsed.file.mimeType,
-          data: parsed.file.data,
-        },
-      });
+    // Each attachment gets its own storage upload and its own indexing event, keyed by
+    // attachmentIndex so parallel files never overwrite each other's object or vectors.
+    if (attachedFiles.length > 0 && isInngestEnabled()) {
+      inngest.send(
+        attachedFiles.map((file, attachmentIndex) => ({
+          name: UPLOAD_IMAGE_AND_SAVE_EVENT,
+          data: {
+            userId: ctx.user,
+            messageId: userMsg.id,
+            filename: file.filename,
+            mimeType: file.mimeType,
+            data: file.data,
+            attachmentIndex,
+            // Only the first attachment claims the message's single imageUrl column.
+            setMessageImageUrl: attachmentIndex === 0,
+          },
+        })),
+      );
     }
 
     assertNotAborted(ctx.signal);
 
-    if (parsed.file && isInngestEnabled()) {
-      inngest.send({
-        name: CHUNK_TEXT_AND_UPLOAD_EVENT,
-        data: {
-          userId: ctx.user,
-          threadId: thread.id,
-          messageId: userMsg.id,
-          role: "user",
-          ...(isProductionEnv() ? {} : { text: extractedFileText! }),
-          sourceFilename: attachedFilename,
-        },
-      });
+    // Files that yielded no text (e.g. an image with nothing OCR-able) have nothing to index.
+    const indexableAttachments = attachments
+      .map((attachment, attachmentIndex) => ({ attachment, attachmentIndex }))
+      .filter(({ attachment }) => attachment.extraction.text.trim().length > 0);
+
+    if (indexableAttachments.length > 0 && isInngestEnabled()) {
+      inngest.send(
+        indexableAttachments.map(({ attachment, attachmentIndex }) => ({
+          name: CHUNK_TEXT_AND_UPLOAD_EVENT,
+          data: {
+            userId: ctx.user,
+            threadId: thread.id,
+            messageId: userMsg.id,
+            role: "user" as const,
+            ...(isProductionEnv() ? {} : { text: attachment.extraction.text }),
+            sourceFilename: attachment.filename,
+            attachmentIndex,
+          },
+        })),
+      );
     }
 
     // Step 3 — RAG: determiner + optional pgvector/Mem0 read (no writes yet).
@@ -132,7 +151,7 @@ export const agentsRouter = router({
       type: "meta" as const,
       threadId: thread.id,
       rag: rag.meta,
-      file: fileMeta,
+      files: filesMeta,
     };
 
     // Step 5 — generate assistant output (Corsair / email writer / direct LLM).
@@ -143,13 +162,11 @@ export const agentsRouter = router({
       messageId: userMsg.id,
       rag,
       signal: ctx.signal,
-      attachedFile: parsed.file
-        ? {
-            filename: parsed.file.filename,
-            mimeType: parsed.file.mimeType,
-            data: parsed.file.data,
-          }
-        : undefined,
+      attachedFiles: attachedFiles.map((file) => ({
+        filename: file.filename,
+        mimeType: file.mimeType,
+        data: file.data,
+      })),
     });
 
     assertNotAborted(ctx.signal);

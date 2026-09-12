@@ -44,8 +44,13 @@ function sanitizeFilename(filename: string): string {
   return base.length > 0 ? base : "attachment";
 }
 
-function buildObjectKey(userId: string, messageId: string, filename: string): string {
-  return `chat/${userId}/${messageId}/${sanitizeFilename(filename)}`;
+export function buildObjectKey(
+  userId: string,
+  messageId: string,
+  filename: string,
+  attachmentIndex = 0,
+): string {
+  return `chat/${userId}/${messageId}/${attachmentIndex}-${sanitizeFilename(filename)}`;
 }
 
 export const uploadImageAndSave = inngest.createFunction(
@@ -57,7 +62,12 @@ export const uploadImageAndSave = inngest.createFunction(
   async ({ event, step }) => {
     const input = uploadImageAndSaveInputModel.parse(event.data);
     const provider = resolveStorageProvider();
-    const key = buildObjectKey(input.userId, input.messageId, input.filename);
+    const key = buildObjectKey(
+      input.userId,
+      input.messageId,
+      input.filename,
+      input.attachmentIndex,
+    );
 
     const upload = await step.run("upload-file", async () => {
       const body = Buffer.from(input.data, "base64");
@@ -90,21 +100,23 @@ export const uploadImageAndSave = inngest.createFunction(
         : fileSaveService.uploadToS3(uploadInput);
     });
 
-    await step.sleep("wait-before-image-url-update", "30s");
+    if (input.setMessageImageUrl) {
+      await step.sleep("wait-before-image-url-update", "30s");
 
-    await step.run("update-message-image-url", async () => {
-      logger.info("Updating chat message with attachment URL", {
-        userId: input.userId,
-        messageId: input.messageId,
-        imageUrl: upload.url,
-      });
+      await step.run("update-message-image-url", async () => {
+        logger.info("Updating chat message with attachment URL", {
+          userId: input.userId,
+          messageId: input.messageId,
+          imageUrl: upload.url,
+        });
 
-      await chatService.updateMessageImageUrl({
-        userId: input.userId,
-        messageId: input.messageId,
-        imageUrl: upload.url,
+        await chatService.updateMessageImageUrl({
+          userId: input.userId,
+          messageId: input.messageId,
+          imageUrl: upload.url,
+        });
       });
-    });
+    }
 
     return uploadImageAndSaveOutputModel.parse({
       imageUrl: upload.url,

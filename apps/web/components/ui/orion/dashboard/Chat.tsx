@@ -19,7 +19,13 @@ import { cn } from "~/lib/utils";
 
 import { gmailSentContacts } from "~/hooks/gmail";
 import { agentAbort, isAbortError } from "~/lib/agent-abort";
-import { AGENT_FILE_ACCEPT, readFileAsBase64, type AttachedAgentFile } from "~/lib/agent-file";
+import {
+  AGENT_FILE_ACCEPT,
+  MAX_FILES_PER_MESSAGE,
+  formatAttachedFilenames,
+  readFilesAsBase64,
+  type AttachedAgentFile,
+} from "~/lib/agent-file";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../tooltip";
 import { createCalendarEvent } from "~/hooks/calendar";
 import { toast } from "sonner";
@@ -37,6 +43,13 @@ const QUICK_ACTIONS = [
     prompt: "Rewrite the selected text to be clearer and more professional.",
   },
 ] as const;
+
+/** Mirror the server's persisted user content so the optimistic bubble dedupes cleanly. */
+function buildDisplayUserContent(text: string, files: AttachedAgentFile[]): string {
+  if (files.length === 0) return text;
+  const attachmentLines = formatAttachedFilenames(files.map((file) => file.filename));
+  return text ? `${text}\n\n${attachmentLines}` : attachmentLines;
+}
 
 function pendingUserVisible(
   pendingUser: string | null,
@@ -133,7 +146,7 @@ export function Chat() {
   const [streamingAssistant, setStreamingAssistant] = useState<string | null>(null);
   const [streamingApprovalIds, setStreamingApprovalIds] = useState<string[]>([]);
   const [input, setInput] = useState("");
-  const [attachedFile, setAttachedFile] = useState<AttachedAgentFile | null>(null);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedAgentFile[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -229,16 +242,16 @@ export function Chat() {
     }
   }
 
-  async function send(prompt: string, file: AttachedAgentFile | null = attachedFile) {
+  async function send(prompt: string, files: AttachedAgentFile[] = attachedFiles) {
     const text = prompt.trim();
-    if ((!text && !file) || isBusy) return;
+    if ((!text && files.length === 0) || isBusy) return;
 
     agentAbort.abort();
     agentAbort.set(new AbortController());
 
     setInput("");
-    setAttachedFile(null);
-    const displayUser = file && !text ? `📎 ${file.filename}` : text;
+    setAttachedFiles([]);
+    const displayUser = buildDisplayUserContent(text, files);
     setPendingUser(displayUser);
     setStreamingAssistant(null);
     setStreamingApprovalIds([]);
@@ -256,6 +269,7 @@ export function Chat() {
           role: "user" as const,
           content: displayUser,
           approvalId: null,
+          imageUrl: null,
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -265,7 +279,7 @@ export function Chat() {
       const stream = await mutateAsync({
         prompt: text,
         threadId: activeThreadId ?? undefined,
-        file: file ?? undefined,
+        files: files.length > 0 ? files : undefined,
       });
       await consumeAgentStream(stream, activeThreadId, optimisticId);
     } catch (e) {
@@ -314,17 +328,21 @@ export function Chat() {
     reset();
   }
 
-  async function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function onFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (!file) return;
+    if (picked.length === 0) return;
 
     try {
-      const encoded = await readFileAsBase64(file);
-      setAttachedFile(encoded);
+      const encoded = await readFilesAsBase64(picked, attachedFiles);
+      setAttachedFiles((prev) => [...prev, ...encoded]);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to attach file.");
+      toast.error(err instanceof Error ? err.message : "Failed to attach files.");
     }
+  }
+
+  function removeAttachedFile(index: number) {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -420,19 +438,28 @@ export function Chat() {
       <form onSubmit={onSubmit} className="border-t border-border p-3">
         <div className="rounded-xl border border-border bg-background p-2">
           <div className="relative rounded-xl border border-border bg-background p-2">
-            {attachedFile && (
-              <div className="mb-2 flex items-center gap-2 rounded-lg border border-border bg-secondary/40 px-2 py-1.5 text-xs">
-                <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate text-foreground">{attachedFile.filename}</span>
-                <button
-                  type="button"
-                  aria-label="Remove attachment"
-                  onClick={() => setAttachedFile(null)}
-                  className="rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
+            {attachedFiles.length > 0 && (
+              <ul className="mb-2 flex flex-wrap gap-1.5">
+                {attachedFiles.map((file, index) => (
+                  <li
+                    key={`${file.filename}-${file.size}-${index}`}
+                    className="flex max-w-full items-center gap-2 rounded-lg border border-border bg-secondary/40 px-2 py-1.5 text-xs"
+                  >
+                    <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 max-w-40 truncate text-foreground">
+                      {file.filename}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${file.filename}`}
+                      onClick={() => removeAttachedFile(index)}
+                      className="rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
             {mention && suggestions.length > 0 && (
               <ul className="absolute bottom-full left-0 right-0 mb-2 max-h-56 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-md">
@@ -503,9 +530,10 @@ export function Chat() {
               <input
                 ref={fileInputRef}
                 type="file"
+                multiple
                 accept={AGENT_FILE_ACCEPT}
                 className="hidden"
-                onChange={onFileSelected}
+                onChange={onFilesSelected}
               />
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -513,15 +541,17 @@ export function Chat() {
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Attach file"
-                    disabled={isBusy}
+                    aria-label="Attach files"
+                    disabled={isBusy || attachedFiles.length >= MAX_FILES_PER_MESSAGE}
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <Paperclip className="size-4 text-muted-foreground" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Attach pdf, image, Word, or spreadsheet</p>
+                  <p>
+                    Attach up to {MAX_FILES_PER_MESSAGE} files — pdf, image, Word, or spreadsheet
+                  </p>
                 </TooltipContent>
               </Tooltip>
               <Tooltip>
@@ -557,7 +587,7 @@ export function Chat() {
                 <Button
                   type="submit"
                   size="icon-sm"
-                  disabled={!input.trim() && !attachedFile}
+                  disabled={!input.trim() && attachedFiles.length === 0}
                   aria-label="Send"
                 >
                   <Send className="size-4" />

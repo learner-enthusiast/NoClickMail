@@ -11,13 +11,15 @@ export const runAgentFileInputModel = z.object({
 
 export type RunAgentFileInputModelType = z.infer<typeof runAgentFileInputModel>;
 
+export const MAX_FILES_PER_MESSAGE = 10;
+
 export const runAgentInputModel = z
   .object({
     prompt: z.string(),
     threadId: z.uuid().optional(),
-    file: runAgentFileInputModel.optional(),
+    files: z.array(runAgentFileInputModel).max(MAX_FILES_PER_MESSAGE).optional(),
   })
-  .refine((input) => input.prompt.trim().length > 0 || input.file, {
+  .refine((input) => input.prompt.trim().length > 0 || (input.files?.length ?? 0) > 0, {
     message: "Provide a message or attach a file.",
   });
 
@@ -27,13 +29,15 @@ export const agentStreamMetaEventModel = z.object({
   type: z.literal("meta"),
   threadId: z.string().uuid(),
   rag: ragRunMetaModel,
-  file: z
-    .object({
-      filename: z.string(),
-      format: supportedFileFormatModel,
-      method: extractionMethodModel,
-      lowConfidence: z.boolean(),
-    })
+  files: z
+    .array(
+      z.object({
+        filename: z.string(),
+        format: supportedFileFormatModel,
+        method: extractionMethodModel,
+        lowConfidence: z.boolean(),
+      }),
+    )
     .optional(),
 });
 
