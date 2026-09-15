@@ -103,16 +103,16 @@ export const uploadImageAndSave = inngest.createFunction(
     await step.sleep("wait-before-image-url-update", "30s");
 
     await step.run("append-message-image-url", async () => {
-      logger.info("Appending chat message attachment URL", {
+      logger.info("Appending chat message attachment key", {
         userId: input.userId,
         messageId: input.messageId,
-        imageUrl: upload.url,
+        storageKey: upload.key,
       });
 
       await chatService.appendMessageImageUrl({
         userId: input.userId,
         messageId: input.messageId,
-        imageUrl: upload.url,
+        imageUrl: upload.key,
       });
     });
 

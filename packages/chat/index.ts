@@ -158,3 +158,4 @@ class ChatService {
 }
 
 export default ChatService;
+export { presignMessageAttachmentUrls } from "./attachment-urls";

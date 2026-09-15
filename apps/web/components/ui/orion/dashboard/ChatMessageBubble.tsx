@@ -6,6 +6,8 @@ import { Check, Copy, ExternalLink } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { toast } from "sonner";
+import { stripAttachmentLines, type ChatAttachmentPreview } from "~/lib/agent-file";
+import { ChatAttachmentPreviews } from "./ChatAttachmentPreviews";
 import { ChatMarkdown } from "./ChatMarkdown";
 
 const USER_COLLAPSED_CHAR_LIMIT = 320;
@@ -96,11 +98,13 @@ export function ChatMessageBubble({
   content,
   approvalId,
   approvalIds: approvalIdsProp,
+  attachmentPreviews,
 }: {
   role: "user" | "assistant";
   content: string;
   approvalId?: string | null;
   approvalIds?: string[];
+  attachmentPreviews?: ChatAttachmentPreview[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const isUser = role === "user";
@@ -108,6 +112,8 @@ export function ChatMessageBubble({
   const approvalIds = [
     ...new Set([...(approvalIdsProp ?? []), ...fromContent, ...(approvalId ? [approvalId] : [])]),
   ];
+  const displayContent = isUser ? stripAttachmentLines(content) : content;
+  const hasAttachmentPreviews = (attachmentPreviews?.length ?? 0) > 0;
 
   return (
     <div
@@ -139,12 +145,21 @@ export function ChatMessageBubble({
       </div>
 
       <div className={cn("pt-1", isUser ? "pr-0 pl-6" : "pr-6 pl-0")}>
-        {isUser ? (
-          <UserMessageBody
-            content={content}
-            expanded={expanded}
-            onToggle={() => setExpanded((value) => !value)}
+        {hasAttachmentPreviews && (
+          <ChatAttachmentPreviews
+            items={attachmentPreviews!}
+            className="mb-2"
+            imageClassName={isUser ? "max-h-28" : undefined}
           />
+        )}
+        {isUser ? (
+          displayContent ? (
+            <UserMessageBody
+              content={displayContent}
+              expanded={expanded}
+              onToggle={() => setExpanded((value) => !value)}
+            />
+          ) : null
         ) : (
           <ChatMarkdown content={content} invert={false} />
         )}

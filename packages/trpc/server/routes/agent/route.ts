@@ -1,7 +1,12 @@
 import z from "zod";
 import { TRPCError } from "@trpc/server";
 import { agentProcedure, authenticatedProcedure, router } from "../../trpc";
-import { chatService, fileExtractorService, ragService } from "../../services";
+import {
+  chatService,
+  fileExtractorService,
+  presignMessageAttachmentUrls,
+  ragService,
+} from "../../services";
 import {
   CHUNK_TEXT_AND_UPLOAD_EVENT,
   UPLOAD_IMAGE_AND_SAVE_EVENT,
@@ -223,17 +228,21 @@ export const agentsRouter = router({
         cursor: input.cursor,
       });
 
-      return {
-        nextCursor: page.nextCursor,
-        messages: page.messages.map((m) => ({
+      const messages = await Promise.all(
+        page.messages.map(async (m) => ({
           id: m.id,
           threadId: m.threadId,
           role: m.role,
           content: m.content,
           approvalId: m.approvalId,
-          imageUrl: m.imageUrl,
+          imageUrl: await presignMessageAttachmentUrls(m.content, m.imageUrl),
           createdAt: m.createdAt.toISOString(),
         })),
+      );
+
+      return {
+        nextCursor: page.nextCursor,
+        messages,
       };
     }),
 });

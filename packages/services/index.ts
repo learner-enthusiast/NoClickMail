@@ -28,7 +28,7 @@ export type { OAuthIntegrationName } from "@repo/corsair";
 export { default as UserService } from "@repo/user";
 export { default as GmailService } from "@repo/gmail";
 export { default as CalendarService } from "@repo/calendar";
-export { default as ChatService } from "@repo/chat";
+export { default as ChatService, presignMessageAttachmentUrls } from "@repo/chat";
 export { default as RagService } from "@repo/rag";
 export { default as CorsairApprovalService } from "@repo/corsair-approvals";
 export { default as CorsairAgent } from "@repo/corsair-agent";

@@ -1,4 +1,5 @@
 import { PutObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "./env";
 import { badRequest, normalizeFileSaveError } from "./error";
 import {
@@ -15,6 +16,37 @@ export type {
   S3UploadInputModelType,
 } from "./model";
 export { fileUploadResultModel, r2UploadInputModel, s3UploadInputModel } from "./model";
+import { parseStorageKeyFromReference } from "./storage-keys";
+
+export {
+  isStorageKey,
+  parseStorageKeyFromReference,
+} from "./storage-keys";
+
+function guessAttachmentContentType(filename?: string): string | undefined {
+  const ext = filename?.split(".").pop()?.toLowerCase();
+  switch (ext) {
+    case "pdf":
+      return "application/pdf";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "csv":
+      return "text/csv";
+    case "xlsx":
+      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    case "xls":
+      return "application/vnd.ms-excel";
+    case "docx":
+      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case "doc":
+      return "application/msword";
+    default:
+      return undefined;
+  }
+}
 
 function resolveS3Config(input: S3UploadInputModelType) {
   const bucket = input.bucket ?? env.AWS_S3_BUCKET;
@@ -208,6 +240,70 @@ class FileSaveService {
     throw badRequest(
       "File storage is not configured. Set AWS_S3_* or R2_* environment variables.",
     );
+  }
+
+  async getPresignedDownloadUrl(
+    key: string,
+    options?: {
+      expiresInSeconds?: number;
+      filename?: string;
+      contentType?: string;
+    },
+  ): Promise<string> {
+    const { client, bucket } = this.resolveDownloadClient();
+    const expiresIn = options?.expiresInSeconds ?? 3600;
+    const sanitizedName = options?.filename?.replace(/[^\w.\-()+]/g, "_");
+
+    try {
+      return await getSignedUrl(
+        client,
+        new GetObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          ...(sanitizedName
+            ? { ResponseContentDisposition: `inline; filename="${sanitizedName}"` }
+            : {}),
+          ...(options?.contentType ? { ResponseContentType: options.contentType } : {}),
+        }),
+        { expiresIn },
+      );
+    } catch (err) {
+      throw normalizeFileSaveError(err);
+    }
+  }
+
+  /**
+   * Turn stored attachment refs (keys or legacy bucket URLs) into time-limited download URLs.
+   * Data/blob URLs are returned unchanged for optimistic client previews.
+   */
+  async resolveAttachmentDownloadUrls(
+    references: string[],
+    filenameHints: string[] = [],
+  ): Promise<string[]> {
+    const out: string[] = [];
+
+    for (const [index, reference] of references.entries()) {
+      if (reference.startsWith("data:") || reference.startsWith("blob:")) {
+        out.push(reference);
+        continue;
+      }
+
+      const key = parseStorageKeyFromReference(reference);
+      if (!key) {
+        out.push(reference);
+        continue;
+      }
+
+      const filename = filenameHints[index] ?? key.split("/").pop();
+      out.push(
+        await this.getPresignedDownloadUrl(key, {
+          filename,
+          contentType: guessAttachmentContentType(filename),
+        }),
+      );
+    }
+
+    return out;
   }
 
   async getObject(key: string): Promise<Buffer> {

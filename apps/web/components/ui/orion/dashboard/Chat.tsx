@@ -10,7 +10,6 @@ import {
   CalendarPlus,
   Square,
   Paperclip,
-  X,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
@@ -30,8 +29,12 @@ import {
   MAX_FILES_PER_MESSAGE,
   formatAttachedFilenames,
   readFilesAsBase64,
+  resolveMessageAttachmentPreviews,
+  toChatAttachmentPreviews,
   type AttachedAgentFile,
+  type ChatAttachmentPreview,
 } from "~/lib/agent-file";
+import { ChatAttachmentPreviews } from "./ChatAttachmentPreviews";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../tooltip";
 import { createCalendarEvent } from "~/hooks/calendar";
 import { toast } from "sonner";
@@ -110,6 +113,39 @@ function pendingUserVisible(
   return !messages?.some((m) => m.role === "user" && m.content === pendingUser);
 }
 
+function shouldUseLocalAttachmentPreviews(
+  message: ThreadMessage,
+  pendingUser: string | null,
+  attachmentPreviewAnchor: string | null,
+) {
+  if (message.role !== "user" || (message.imageUrl?.length ?? 0) > 0) return false;
+  return (
+    message.id.startsWith("optimistic-") ||
+    (pendingUser !== null && message.content === pendingUser) ||
+    (attachmentPreviewAnchor !== null && message.content === attachmentPreviewAnchor)
+  );
+}
+
+function scheduleAttachmentUrlRefresh(
+  utils: ReturnType<typeof trpc.useUtils>,
+  threadId: string,
+  onSettled?: () => void,
+) {
+  window.setTimeout(() => {
+    void utils.agent.threadMessages
+      .invalidate(threadMessagesQueryInput(threadId))
+      .finally(onSettled);
+  }, 35_000);
+}
+
+function clearAttachmentPreviewState(
+  setInflight: React.Dispatch<React.SetStateAction<ChatAttachmentPreview[]>>,
+  setAnchor: React.Dispatch<React.SetStateAction<string | null>>,
+) {
+  setInflight([]);
+  setAnchor(null);
+}
+
 /** Transcript — paginated server messages plus optimistic in-flight user turn. */
 function Transcript({
   threadId,
@@ -119,6 +155,9 @@ function Transcript({
   streamingApprovalIds,
   errorMessage,
   scrollRef,
+  inflightAttachmentPreviews,
+  attachmentPreviewAnchor,
+  onAttachmentUrlsReady,
 }: {
   threadId: string | null;
   pendingUser: string | null;
@@ -127,6 +166,9 @@ function Transcript({
   streamingApprovalIds: string[];
   errorMessage: string | null;
   scrollRef: React.RefObject<HTMLDivElement | null>;
+  inflightAttachmentPreviews: ChatAttachmentPreview[];
+  attachmentPreviewAnchor: string | null;
+  onAttachmentUrlsReady: () => void;
 }) {
   const {
     data,
@@ -149,6 +191,17 @@ function Transcript({
   useEffect(() => {
     stickToBottomRef.current = true;
   }, [threadId]);
+
+  useEffect(() => {
+    if (!attachmentPreviewAnchor) return;
+    const matched = messages.find(
+      (message) =>
+        message.role === "user" &&
+        message.content === attachmentPreviewAnchor &&
+        (message.imageUrl?.length ?? 0) > 0,
+    );
+    if (matched) onAttachmentUrlsReady();
+  }, [attachmentPreviewAnchor, messages, onAttachmentUrlsReady]);
 
   useEffect(() => {
     if (loadingOlderRef.current || !stickToBottomRef.current) return;
@@ -222,10 +275,32 @@ function Transcript({
             role={m.role}
             content={m.content}
             approvalId={m.approvalId}
+            attachmentPreviews={
+              m.role === "user"
+                ? resolveMessageAttachmentPreviews({
+                    content: m.content,
+                    imageUrls: m.imageUrl,
+                    localPreviews: shouldUseLocalAttachmentPreviews(
+                      m,
+                      pendingUser,
+                      attachmentPreviewAnchor,
+                    )
+                      ? inflightAttachmentPreviews
+                      : undefined,
+                  })
+                : undefined
+            }
           />
         ))}
       {showPendingUser && pendingUser && (
-        <ChatMessageBubble role="user" content={pendingUser} />
+        <ChatMessageBubble
+          role="user"
+          content={pendingUser}
+          attachmentPreviews={resolveMessageAttachmentPreviews({
+            content: pendingUser,
+            localPreviews: inflightAttachmentPreviews,
+          })}
+        />
       )}
       {isBusy && !streamingAssistant && <ThinkingBubble />}
       {streamingAssistant && (
@@ -259,6 +334,10 @@ export function Chat() {
   const [streamingApprovalIds, setStreamingApprovalIds] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<AttachedAgentFile[]>([]);
+  const [inflightAttachmentPreviews, setInflightAttachmentPreviews] = useState<
+    ChatAttachmentPreview[]
+  >([]);
+  const [attachmentPreviewAnchor, setAttachmentPreviewAnchor] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -308,6 +387,7 @@ export function Chat() {
     stream: AsyncIterable<AgentStreamEventModelType>,
     activeThreadId: string | null,
     optimisticId: string,
+    hadAttachments: boolean,
   ) {
     let resolvedThreadId = activeThreadId;
 
@@ -344,6 +424,13 @@ export function Chat() {
     if (resolvedThreadId) {
       await utils.agent.threadMessages.invalidate(threadMessagesQueryInput(resolvedThreadId));
       await utils.agent.listThreads.invalidate();
+      if (hadAttachments) {
+        scheduleAttachmentUrlRefresh(utils, resolvedThreadId, () => {
+          clearAttachmentPreviewState(setInflightAttachmentPreviews, setAttachmentPreviewAnchor);
+        });
+      } else {
+        clearAttachmentPreviewState(setInflightAttachmentPreviews, setAttachmentPreviewAnchor);
+      }
       setPendingUser(null);
       setStreamingAssistant(null);
       setStreamingApprovalIds([]);
@@ -358,8 +445,11 @@ export function Chat() {
     agentAbort.set(new AbortController());
 
     setInput("");
+    const localPreviews = toChatAttachmentPreviews(files);
     setAttachedFiles([]);
+    setInflightAttachmentPreviews(localPreviews);
     const displayUser = buildDisplayUserContent(text, files);
+    setAttachmentPreviewAnchor(files.length > 0 ? displayUser : null);
     setPendingUser(displayUser);
     setStreamingAssistant(null);
     setStreamingApprovalIds([]);
@@ -386,7 +476,7 @@ export function Chat() {
         threadId: activeThreadId ?? undefined,
         files: files.length > 0 ? files : undefined,
       });
-      await consumeAgentStream(stream, activeThreadId, optimisticId);
+      await consumeAgentStream(stream, activeThreadId, optimisticId, files.length > 0);
     } catch (e) {
       if (isAbortError(e)) {
         if (activeThreadId) {
@@ -396,6 +486,7 @@ export function Chat() {
         setStreamingAssistant(null);
         setStreamingApprovalIds([]);
         await syncThreadMessages(activeThreadId);
+        clearAttachmentPreviewState(setInflightAttachmentPreviews, setAttachmentPreviewAnchor);
         setPendingUser(null);
         return;
       }
@@ -411,6 +502,7 @@ export function Chat() {
       if (activeThreadId) {
         removeOptimisticFromThread(utils, activeThreadId, optimisticId);
       }
+      clearAttachmentPreviewState(setInflightAttachmentPreviews, setAttachmentPreviewAnchor);
       if (syncedId) {
         setPendingUser(null);
       } else {
@@ -523,6 +615,11 @@ export function Chat() {
           streamingApprovalIds={streamingApprovalIds}
           errorMessage={errorMessage}
           scrollRef={scrollRef}
+          inflightAttachmentPreviews={inflightAttachmentPreviews}
+          attachmentPreviewAnchor={attachmentPreviewAnchor}
+          onAttachmentUrlsReady={() =>
+            clearAttachmentPreviewState(setInflightAttachmentPreviews, setAttachmentPreviewAnchor)
+          }
         />
       </div>
 
@@ -545,27 +642,11 @@ export function Chat() {
         <div className="rounded-xl border border-border bg-background p-2">
           <div className="relative rounded-xl border border-border bg-background p-2">
             {attachedFiles.length > 0 && (
-              <ul className="mb-2 flex flex-wrap gap-1.5">
-                {attachedFiles.map((file, index) => (
-                  <li
-                    key={`${file.filename}-${file.size}-${index}`}
-                    className="flex max-w-full items-center gap-2 rounded-lg border border-border bg-secondary/40 px-2 py-1.5 text-xs"
-                  >
-                    <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 max-w-40 truncate text-foreground">
-                      {file.filename}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${file.filename}`}
-                      onClick={() => removeAttachedFile(index)}
-                      className="rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <ChatAttachmentPreviews
+                items={toChatAttachmentPreviews(attachedFiles)}
+                onRemove={removeAttachedFile}
+                className="mb-2"
+              />
             )}
             {mention && suggestions.length > 0 && (
               <ul className="absolute bottom-full left-0 right-0 mb-2 max-h-56 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-md">

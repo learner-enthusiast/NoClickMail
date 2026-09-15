@@ -22,6 +22,13 @@ export type AttachedAgentFile = {
   mimeType?: string;
   data: string;
   size: number;
+  /** Data URL for immediate image preview in the composer and optimistic chat bubble. */
+  previewUrl?: string;
+};
+
+export type ChatAttachmentPreview = {
+  filename: string;
+  previewUrl?: string;
 };
 
 function extensionFromFilename(filename: string): string | null {
@@ -62,11 +69,13 @@ export function readFileAsBase64(file: File): Promise<AttachedAgentFile> {
         return;
       }
 
+      const mimeType = file.type || undefined;
       resolve({
         filename: file.name,
-        mimeType: file.type || undefined,
+        mimeType,
         data: base64,
         size: file.size,
+        previewUrl: buildAttachmentPreviewUrl(file.name, mimeType, base64),
       });
     };
     reader.onerror = () => reject(new Error("Failed to read file."));
@@ -135,4 +144,83 @@ export async function readFilesAsBase64(
 
 export function formatAttachedFilenames(filenames: string[]): string {
   return filenames.map((filename) => `📎 ${filename}`).join("\n");
+}
+
+export function attachmentFilenamesFromContent(content: string): string[] {
+  return content
+    .split("\n")
+    .filter((line) => line.startsWith("📎 "))
+    .map((line) => line.slice(2).trim())
+    .filter(Boolean);
+}
+
+export function stripAttachmentLines(content: string): string {
+  return content
+    .split("\n")
+    .filter((line) => !line.startsWith("📎 "))
+    .join("\n")
+    .trim();
+}
+
+function buildAttachmentPreviewUrl(
+  filename: string,
+  mimeType: string | undefined,
+  base64: string,
+): string | undefined {
+  if (!base64) return undefined;
+
+  if (mimeType?.startsWith("image/")) {
+    return `data:${mimeType};base64,${base64}`;
+  }
+
+  const ext = extensionFromFilename(filename);
+  if (mimeType === "application/pdf" || ext === "pdf") {
+    return `data:application/pdf;base64,${base64}`;
+  }
+
+  return undefined;
+}
+
+export function isImageAttachment(filename: string, previewUrl?: string): boolean {
+  if (previewUrl?.startsWith("data:image/") || previewUrl?.startsWith("blob:")) return true;
+  return /\.(png|jpe?g|gif|webp)$/i.test(filename);
+}
+
+export function isPdfAttachment(filename: string, previewUrl?: string): boolean {
+  if (previewUrl?.startsWith("data:application/pdf") || previewUrl?.includes(".pdf")) {
+    return true;
+  }
+  return extensionFromFilename(filename) === "pdf";
+}
+
+export function isPreviewableAttachment(filename: string, previewUrl?: string): boolean {
+  return isImageAttachment(filename, previewUrl) || isPdfAttachment(filename, previewUrl);
+}
+
+export function toChatAttachmentPreviews(files: AttachedAgentFile[]): ChatAttachmentPreview[] {
+  return files.map((file) => ({
+    filename: file.filename,
+    previewUrl: file.previewUrl,
+  }));
+}
+
+export function resolveMessageAttachmentPreviews(input: {
+  content: string;
+  imageUrls?: string[] | null;
+  localPreviews?: ChatAttachmentPreview[];
+}): ChatAttachmentPreview[] {
+  const filenames = attachmentFilenamesFromContent(input.content);
+
+  if (input.imageUrls?.length) {
+    return input.imageUrls.map((previewUrl, index) => ({
+      filename: filenames[index] ?? `Attachment ${index + 1}`,
+      previewUrl,
+    }));
+  }
+
+  if (input.localPreviews?.length) {
+    return input.localPreviews;
+  }
+
+  return filenames.map((filename) => ({ filename }));
 }
