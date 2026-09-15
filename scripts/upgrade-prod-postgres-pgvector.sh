@@ -13,14 +13,14 @@ BACKUP_DIR="${BACKUP_DIR:-${ROOT}/backups/postgres}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 # Prod database — edit here if credentials change
-POSTGRES_USER="postgres"
+POSTGRES_USER="Orion"
 POSTGRES_PASSWORD="Arnab@2854"
 POSTGRES_DB="oriondb"
 POSTGRES_PORT="5432"
 PGADMIN_EMAIL="loveumearnab.2812000@gmail.com"
 PGADMIN_PASSWORD="Arnab@2854"
 PGADMIN_PORT="5050"
-DATABASE_URL="postgresql://postgres:Arnab%402854@127.0.0.1:5432/oriondb"
+DATABASE_URL="postgresql://Orion:Arnab@2854@127.0.0.1:5432/oriondb"
 DATABASE_URL_DIRECT="${DATABASE_URL}"
 
 export POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT
