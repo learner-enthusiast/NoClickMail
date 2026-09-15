@@ -107,6 +107,26 @@ jobs:
           log "build"
           pnpm build
 
+          log "postgres (docker)"
+          if [ -f docker-compose.prod-db.yml ]; then
+            set -a
+            # shellcheck disable=SC1091
+            source .env
+            set +a
+            docker compose -f docker-compose.prod-db.yml --env-file .env up -d postgres
+            for i in $(seq 1 30); do
+              if docker compose -f docker-compose.prod-db.yml --env-file .env exec -T postgres \
+                pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-oriondb}" >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
+            docker compose -f docker-compose.prod-db.yml --env-file .env exec -T postgres \
+              pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-oriondb}"
+          else
+            echo "docker-compose.prod-db.yml not found — assuming Postgres already running at DATABASE_URL"
+          fi
+
           log "database migrations"
           pnpm db:migrate
 

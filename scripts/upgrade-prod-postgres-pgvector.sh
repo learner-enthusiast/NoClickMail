@@ -8,8 +8,8 @@
 #   ./scripts/upgrade-prod-postgres-pgvector.sh
 #
 # Requires in .env:
-#   POSTGRES_PASSWORD, POSTGRES_USER (optional), POSTGRES_DB (optional)
-#   DATABASE_URL pointing at this Postgres (e.g. postgresql://postgres:PASS@127.0.0.1:5432/noclickmail)
+#   DATABASE_URL (or DATABASE_URL_DIRECT) — user, password, host, port, db name are read from this
+#   POSTGRES_* vars optional overrides for Docker compose
 
 set -euo pipefail
 
@@ -33,19 +33,41 @@ set -a
 source "${ENV_FILE}"
 set +a
 
-POSTGRES_USER="${POSTGRES_USER:-postgres}"
-POSTGRES_DB="${POSTGRES_DB:-noclickmail}"
-POSTGRES_PORT="${POSTGRES_PORT:-5432}"
-
-if [[ -z "${POSTGRES_PASSWORD:-}" ]]; then
-  echo "POSTGRES_PASSWORD must be set in ${ENV_FILE}" >&2
+MIGRATE_DATABASE_URL="${DATABASE_URL_DIRECT:-${DATABASE_URL:-}}"
+if [[ -z "${MIGRATE_DATABASE_URL}" ]]; then
+  echo "DATABASE_URL (or DATABASE_URL_DIRECT) must be set in ${ENV_FILE}" >&2
   exit 1
 fi
 
-if [[ -z "${DATABASE_URL:-}" ]]; then
-  echo "DATABASE_URL must be set in ${ENV_FILE} (used by pnpm db:migrate)" >&2
+eval "$(node -e "
+  const raw = process.argv[1];
+  const u = new URL(raw.replace(/^postgresql:/, 'http:'));
+  const db = u.pathname.replace(/^\\//, '') || 'postgres';
+  const user = decodeURIComponent(u.username || 'postgres');
+  const pass = decodeURIComponent(u.password || '');
+  const port = u.port || '5432';
+  const host = u.hostname;
+  const emit = (k, v) => console.log('export ' + k + '=' + JSON.stringify(v));
+  emit('PARSED_DB_USER', user);
+  emit('PARSED_DB_NAME', db);
+  emit('PARSED_DB_PORT', port);
+  emit('PARSED_DB_HOST', host);
+  emit('PARSED_DB_PASSWORD', pass);
+" "${MIGRATE_DATABASE_URL}")"
+
+POSTGRES_USER="${POSTGRES_USER:-${PARSED_DB_USER}}"
+POSTGRES_DB="${POSTGRES_DB:-${PARSED_DB_NAME}}"
+POSTGRES_PORT="${POSTGRES_PORT:-${PARSED_DB_PORT}}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-${PARSED_DB_PASSWORD:-}}"
+
+if [[ -z "${POSTGRES_PASSWORD}" ]]; then
+  echo "Postgres password missing — set POSTGRES_PASSWORD or include it in DATABASE_URL" >&2
   exit 1
 fi
+
+export POSTGRES_USER POSTGRES_DB POSTGRES_PORT POSTGRES_PASSWORD
+
+log "Using database from .env: ${PARSED_DB_HOST}:${POSTGRES_PORT}/${POSTGRES_DB} (user: ${POSTGRES_USER})"
 
 log "Pull pgvector Postgres image"
 docker compose -f "${COMPOSE_FILE}" --env-file "${ENV_FILE}" pull postgres
