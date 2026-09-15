@@ -1,0 +1,32 @@
+# Production Postgres only — pgvector, no MinIO.
+# Use when the app runs on the host (systemd / pnpm start) and only the DB is in Docker.
+#
+#   docker compose -f docker-compose.prod-db.yml --env-file .env up -d
+#
+# Point DATABASE_URL at 127.0.0.1 (see .env.example). Reuses the pg_data volume across image upgrades.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-noclickmail}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-noclickmail}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  pg_data:
