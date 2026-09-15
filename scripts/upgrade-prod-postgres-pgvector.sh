@@ -13,7 +13,7 @@ BACKUP_DIR="${BACKUP_DIR:-${ROOT}/backups/postgres}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 # Prod database — edit here if credentials change
-POSTGRES_USER="Orion"
+POSTGRES_USER="postgres"
 POSTGRES_PASSWORD="Arnab@2854"
 POSTGRES_DB="oriondb"
 POSTGRES_PORT="5432"
